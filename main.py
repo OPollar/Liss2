@@ -23,11 +23,20 @@ client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = FastAPI()
 
 # ---------------------------------------------------------------------------
-# Modelos (Gemini, camada gratuita) — a Liss escolhe sozinha qual usar
+# Modelos (Gemini, camada 100% gratuita, sem cartão cadastrado) — a Liss
+# escolhe sozinha qual usar. IMPORTANTE: os modelos da família Gemini 3.x
+# (3.5/3.6/3.1) NÃO têm busca no Google grátis — só a família 2.5 tem,
+# e só nos modelos Flash/Flash-Lite (o 2.5 Pro não tem busca grátis).
+# A Google já avisou que a família 2.5 será desligada em outubro de 2026 —
+# quando chegar perto disso, troque para gemini-3.5-flash e ative billing
+# se quiser manter a busca funcionando.
 # ---------------------------------------------------------------------------
-MODEL_LEVE = "gemini-3.1-flash-lite"    # respostas rápidas, bate-papo comum
-MODEL_PADRAO = "gemini-3.5-flash"       # equilíbrio: raciocínio + velocidade
-MODEL_PROFUNDO = "gemini-3.1-pro-preview"  # raciocínio pesado, código complexo, análise longa
+MODEL_LEVE = "gemini-2.5-flash-lite"    # respostas rápidas, bate-papo comum
+MODEL_PADRAO = "gemini-2.5-flash"       # equilíbrio: raciocínio + velocidade
+MODEL_PROFUNDO = "gemini-2.5-pro"       # raciocínio pesado, código complexo, análise longa
+
+# modelos que têm busca no Google liberada de graça (sem billing ativado)
+MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO}
 
 TTS_VOICE = "pt-BR-FranciscaNeural"
 
@@ -91,12 +100,9 @@ def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: 
         MODEL_LEVE: [MODEL_LEVE, MODEL_PADRAO],
     }[modelo_escolhido]
 
-    tools = [{"type": "google_search"}]
-    if modelo_escolhido == MODEL_PROFUNDO:
-        tools.append({"type": "code_execution"})
-
     ultimo_erro = None
     for modelo in cascata:
+        tools = [{"type": "google_search"}] if modelo in MODELOS_COM_BUSCA_GRATIS else []
         try:
             interaction = client_gemini.interactions.create(
                 model=modelo,
