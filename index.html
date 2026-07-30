@@ -1,17 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shogun AI - VTuber</title>
+    <title>Liss AI - VTuber</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             background-color: #0b0b10;
             color: #e2e8f0;
@@ -23,31 +17,22 @@
             min-height: 100vh;
             padding: 20px;
         }
-        
-        header {
-            text-align: center;
-            margin-top: 10px;
-        }
-        
+
+        header { text-align: center; margin-top: 5px; }
+
         h1 {
             color: #c084fc;
             font-size: 2rem;
             letter-spacing: 2px;
             text-shadow: 0 0 12px rgba(192, 132, 252, 0.4);
         }
-        
-        #status {
-            font-size: 0.85rem;
-            color: #22c55e;
-            margin-top: 5px;
-            font-weight: 600;
-        }
-        /* VTuber Container */
-        
+
+        #status { font-size: 0.85rem; color: #22c55e; margin-top: 5px; font-weight: 600; }
+
         .vtuber-box {
             position: relative;
-            width: 220px;
-            height: 220px;
+            width: 200px;
+            height: 200px;
             border-radius: 50%;
             border: 3px solid #c084fc;
             box-shadow: 0 0 30px rgba(192, 132, 252, 0.3);
@@ -55,33 +40,21 @@
             align-items: center;
             justify-content: center;
             background: radial-gradient(circle, #1e1b4b 0%, #0f172a 100%);
-            margin: 20px 0;
+            margin: 15px 0;
         }
-        
-        .avatar {
-            font-size: 90px;
-            user-select: none;
-            transition: transform 0.15s ease;
-        }
-        
-        .speaking {
-            animation: talk 0.3s infinite alternate ease-in-out;
-        }
-        
+
+        .avatar { font-size: 85px; user-select: none; transition: transform 0.15s ease; }
+        .speaking { animation: talk 0.3s infinite alternate ease-in-out; }
+
         @keyframes talk {
-            0% {
-                transform: scale(1) translateY(0);
-            }
-            100% {
-                transform: scale(1.12) translateY(-5px);
-            }
+            0% { transform: scale(1) translateY(0); }
+            100% { transform: scale(1.12) translateY(-5px); }
         }
-        /* Chat Log */
-        
+
         #chat-log {
             width: 100%;
             max-width: 600px;
-            height: 220px;
+            height: 200px;
             background: #13131d;
             border: 1px solid #27273a;
             border-radius: 16px;
@@ -90,119 +63,69 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
         }
-        
-        .msg {
-            padding: 10px 14px;
-            border-radius: 12px;
-            max-width: 85%;
-            font-size: 0.95rem;
-            line-height: 1.4;
-        }
-        
-        .msg.user {
-            background: #312e81;
-            color: #e0e7ff;
-            align-self: flex-end;
-            border-bottom-right-radius: 2px;
-        }
-        
-        .msg.shogun {
-            background: #2e1065;
-            color: #f3e8ff;
-            align-self: flex-start;
-            border-bottom-left-radius: 2px;
-            border: 1px solid #581c87;
-        }
-        
-        .msg.system {
-            background: transparent;
-            color: #ef4444;
-            align-self: center;
-            font-style: italic;
-            font-size: 0.8rem;
-        }
-        /* Botões */
-        
-        .controls {
+
+        .msg { padding: 10px 14px; border-radius: 12px; max-width: 85%; font-size: 0.95rem; line-height: 1.4; }
+        .msg.user { background: #312e81; color: #e0e7ff; align-self: flex-end; }
+        .msg.liss { background: #2e1065; color: #f3e8ff; align-self: flex-start; border: 1px solid #581c87; }
+        .msg.system { background: transparent; color: #ef4444; align-self: center; font-style: italic; font-size: 0.8rem; }
+
+        .input-box {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             width: 100%;
             max-width: 600px;
-            margin-top: 15px;
+            margin-top: 10px;
         }
-        
-        button {
+
+        input[type="text"] {
             flex: 1;
-            padding: 14px;
-            border: none;
-            border-radius: 12px;
-            font-weight: 700;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #181824;
+            color: white;
             font-size: 0.95rem;
+            outline: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 600px;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 12px 16px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.9rem;
             cursor: pointer;
             transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
         }
-        
-        #btn-speak {
-            background: #a855f7;
-            color: white;
-        }
-        
-        #btn-speak:hover {
-            background: #9333ea;
-        }
-        
-        #btn-speak.recording {
-            background: #dc2626;
-            animation: pulse-red 1s infinite;
-        }
-        
-        #btn-screen {
-            background: #1e293b;
-            color: #cbd5e1;
-            border: 1px solid #334155;
-        }
-        
-        #btn-screen:hover {
-            background: #334155;
-        }
-        
-        #btn-18 {
-            background: #181824;
-            color: #ef4444;
-            border: 1px solid #7f1d1d;
-        }
-        
-        #btn-18.active {
-            background: #ef4444;
-            color: white;
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
-        }
-        
-        @keyframes pulse-red {
-            0% {
-                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
-            }
-            70% {
-                box-shadow: 0 0 0 12px rgba(220, 38, 38, 0);
-            }
-            100% {
-                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
-            }
+
+        #btn-send { background: #c084fc; color: #0b0b10; }
+        #btn-speak { background: #a855f7; color: white; flex: 1; }
+        #btn-speak.recording { background: #dc2626; animation: pulse 1s infinite; }
+        #btn-screen { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+        #btn-18 { background: #181824; color: #ef4444; border: 1px solid #7f1d1d; }
+        #btn-18.active { background: #ef4444; color: white; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
         }
     </style>
 </head>
-
 <body>
 
     <header>
-        <h1>👑 SHOGUN AI</h1>
-        <div id="status">● Conectado à Nuvem</div>
+        <h1>👑 LISS AI</h1>
+        <div id="status">● Conectada à Nuvem</div>
     </header>
 
     <div class="vtuber-box">
@@ -210,7 +133,13 @@
     </div>
 
     <div id="chat-log">
-        <div class="msg shogun">Olá, Gatão. Diga logo o que você quer antes que eu mude de ideia.</div>
+        <div class="msg liss">Olá, Gatão. Sou a Liss. Diga logo o que você quer antes que eu mude de ideia.</div>
+    </div>
+
+    <!-- Caixa de Envio por Texto -->
+    <div class="input-box">
+        <input type="text" id="text-input" placeholder="Digite sua mensagem para a Liss..." />
+        <button id="btn-send">Enviar</button>
     </div>
 
     <div class="controls">
@@ -225,27 +154,35 @@
         const chatLog = document.getElementById("chat-log");
         const btn18 = document.getElementById("btn-18");
         const btnSpeak = document.getElementById("btn-speak");
-
+        const textInput = document.getElementById("text-input");
+        const btnSend = document.getElementById("btn-send");
+        
         let modo18 = false;
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
 
-        ws.onmessage = async(event) => {
+        ws.onmessage = async (event) => {
             const data = JSON.parse(event.data);
 
             if (data.type === "response") {
-                // Adiciona a resposta no chat
+                // Se a Liss transcreveu a voz do usuário, mostra o texto real que ele falou
+                if (data.user_text) {
+                    const userDiv = document.createElement("div");
+                    userDiv.className = "msg user";
+                    userDiv.innerHTML = `<strong>Você:</strong> ${data.user_text}`;
+                    chatLog.appendChild(userDiv);
+                }
+
+                // Resposta da Liss
                 const msgDiv = document.createElement("div");
-                msgDiv.className = "msg shogun";
-                msgDiv.innerHTML = `<strong>Shogun:</strong> ${data.text}`;
+                msgDiv.className = "msg liss";
+                msgDiv.innerHTML = `<strong>Liss:</strong> ${data.text}`;
                 chatLog.appendChild(msgDiv);
                 chatLog.scrollTop = chatLog.scrollHeight;
 
-                // Anima o avatar VTuber enquanto fala
                 avatar.classList.add("speaking");
 
-                // Se houver áudio gerado, toca automaticamente
                 if (data.audio) {
                     const audio = new Audio("data:audio/mp3;base64," + data.audio);
                     audio.play();
@@ -264,48 +201,48 @@
             }
         };
 
-        // Alternar Modo +18
+        // Função para enviar texto digitado
+        function sendText() {
+            const text = textInput.value.trim();
+            if (text) {
+                const userDiv = document.createElement("div");
+                userDiv.className = "msg user";
+                userDiv.innerHTML = `<strong>Você:</strong> ${text}`;
+                chatLog.appendChild(userDiv);
+                chatLog.scrollTop = chatLog.scrollHeight;
+
+                ws.send(JSON.stringify({ "text": text }));
+                textInput.value = "";
+            }
+        }
+
+        btnSend.onclick = sendText;
+        textInput.onkeypress = (e) => { if (e.key === "Enter") sendText(); };
+
+        // Modo +18
         btn18.onclick = () => {
             modo18 = !modo18;
             btn18.classList.toggle("active");
             btn18.innerText = modo18 ? "🔥 Modo +18: ON" : "🔥 Modo +18: OFF";
-            ws.send(JSON.stringify({
-                "toggle_18": modo18
-            }));
+            ws.send(JSON.stringify({ "toggle_18": modo18 }));
         };
 
-        // Gravação de Áudio do Microfone do Celular/PC
-        btnSpeak.onclick = async() => {
+        // Microfone
+        btnSpeak.onclick = async () => {
             if (!isRecording) {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: true
-                    });
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                     mediaRecorder = new MediaRecorder(stream);
                     audioChunks = [];
 
                     mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-
-                    mediaRecorder.onstop = async() => {
-                        const audioBlob = new Blob(audioChunks, {
-                            type: 'audio/wav'
-                        });
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                         const reader = new FileReader();
                         reader.readAsDataURL(audioBlob);
                         reader.onloadend = () => {
                             const base64Audio = reader.result.split(',')[1];
-
-                            // Adiciona mensagem visual do usuário
-                            const userDiv = document.createElement("div");
-                            userDiv.className = "msg user";
-                            userDiv.innerHTML = "🎤 <i>Áudio enviado...</i>";
-                            chatLog.appendChild(userDiv);
-                            chatLog.scrollTop = chatLog.scrollHeight;
-
-                            // Envia o áudio gravado via WebSocket
-                            ws.send(JSON.stringify({
-                                "audio": base64Audio
-                            }));
+                            ws.send(JSON.stringify({ "audio": base64Audio }));
                         };
                     };
 
@@ -314,7 +251,7 @@
                     btnSpeak.classList.add("recording");
                     btnSpeak.innerText = "🛑 Parar e Enviar";
                 } catch (err) {
-                    alert("Erro ao acessar o microfone! Permita o acesso no navegador.");
+                    alert("Acesso ao microfone negado!");
                 }
             } else {
                 mediaRecorder.stop();
@@ -325,5 +262,4 @@
         };
     </script>
 </body>
-
 </html>
