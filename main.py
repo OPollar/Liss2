@@ -11,7 +11,7 @@ import edge_tts
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-# Inicializa os clientes se as chaves existirem
+# Inicializa os clientes das IAs
 client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
 client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
@@ -89,15 +89,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Resposta via Gemini 1.5 Flash
+                    # Usa o modelo mais recente e rápido do Gemini no SDK novo
                     response = client_gemini.models.generate_content(
-                        model='gemini-1.5-flash',
+                        model='gemini-2.5-flash',
                         contents=prompt_completo,
                     )
                     resposta_texto = response.text
                     print(f"👑 Liss respondeu: {resposta_texto}")
                     
-                    # Áudio neural
+                    # Áudio neural com a voz da Liss
                     audio_file = "temp_output.mp3"
                     communicate = edge_tts.Communicate(resposta_texto, "pt-BR-FranciscaNeural")
                     await communicate.save(audio_file)
