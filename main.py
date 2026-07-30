@@ -3,7 +3,7 @@ import base64
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 import edge_tts
 
@@ -11,9 +11,8 @@ import edge_tts
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-
+# Inicializa o cliente oficial do Gemini
+client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
 client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 app = FastAPI()
@@ -35,7 +34,7 @@ async def get_app():
     if os.path.exists("index.html"):
         with open("index.html", "r", encoding="utf-8") as f:
             return f.read()
-    return "<h1>Erro: index.html não encontrado no servidor!</h1>"
+    return "<h1>Erro: index.html não encontrado!</h1>"
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -55,6 +54,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             user_text = ""
             
+            # Áudio via Groq Whisper
             if "audio" in data and client_groq:
                 try:
                     audio_bytes = base64.b64decode(data["audio"])
@@ -76,10 +76,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 user_text = data["text"]
 
             if user_text:
-                if not GEMINI_KEY:
+                if not client_gemini:
                     await websocket.send_json({
                         "type": "info",
-                        "message": "⚠️ Erro: GEMINI_API_KEY não configurada no Render!"
+                        "message": "⚠️ Erro: GEMINI_API_KEY ausente no Render!"
                     })
                     continue
 
@@ -87,13 +87,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Força a busca dos modelos ativos na sua conta
-                    modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                    modelo_escolhido = modelos[0] if modelos else 'models/gemini-1.5-flash'
-                    print(f"Usando modelo: {modelo_escolhido}")
-
-                    model = genai.GenerativeModel(modelo_escolhido)
-                    response = model.generate_content(prompt_completo)
+                    # Chamada oficial da API
+                    response = client_gemini.models.generate_content(
+                        model='gemini-1.5-flash',
+                        contents=prompt_completo,
+                    )
                     resposta_texto = response.text
                     print(f"👑 Liss respondeu: {resposta_texto}")
                     
