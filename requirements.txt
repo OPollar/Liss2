@@ -1,0 +1,7 @@
+Plaintext
+fastapi
+uvicorn
+google-genai
+groq
+edge-tts
+websockets
