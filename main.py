@@ -89,9 +89,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Usa o modelo mais recente e rápido do Gemini no SDK novo
+                    # Nome do modelo corrigido no SDK novo
                     response = client_gemini.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-2.0-flash',
                         contents=prompt_completo,
                     )
                     resposta_texto = response.text
