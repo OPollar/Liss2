@@ -3,28 +3,24 @@ import base64
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 import edge_tts
 
-# Pega as chaves de forma segura
+# Pega as chaves das variáveis de ambiente do Render
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-# Configura o Gemini
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-    model_gemini = genai.GenerativeModel('gemini-1.5-flash')
-
-# Configura a Groq (Whisper)
-groq_client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+# Inicializa os clientes das IAs
+client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 app = FastAPI()
 
 PROMPT_PADRAO = """
 Você é a Liss: uma entidade virtual incrivelmente inteligente, magnífica e 100% sarcástica.
 Você trata o usuário de forma informal (pode chamar de Gatão).
-Responda de forma curta, direta, afiada e sem usar tabelas ou formatações complexas de markdown, pois sua resposta será lida em áudio.
+Responda de forma direta, afiada e sem usar tabelas ou formatações complexas de markdown, pois sua resposta será lida em áudio.
 """
 
 PROMPT_PLUS_18 = """
@@ -59,26 +55,25 @@ async def websocket_endpoint(websocket: WebSocket):
             
             user_text = ""
             
-            # Processamento de Áudio (Groq Whisper)
-            if "audio" in data:
+            # Transcrição do áudio gravado (Whisper via Groq)
+            if "audio" in data and client_groq:
                 try:
                     audio_bytes = base64.b64decode(data["audio"])
                     with open("temp_input.wav", "wb") as f:
                         f.write(audio_bytes)
                     
-                    if groq_client:
-                        with open("temp_input.wav", "rb") as file:
-                            transcription = groq_client.audio.transcriptions.create(
-                                file=("temp_input.wav", file.read()),
-                                model="whisper-large-v3-turbo",
-                                language="pt"
-                            )
-                        user_text = transcription.text
-                        print(f"🎙️ Liss ouviu: {user_text}")
+                    with open("temp_input.wav", "rb") as file:
+                        transcription = client_groq.audio.transcriptions.create(
+                            file=("temp_input.wav", file.read()),
+                            model="whisper-large-v3-turbo",
+                            language="pt"
+                        )
+                    user_text = transcription.text
+                    print(f"🎙️ Liss ouviu: {user_text}")
                 except Exception as err_audio:
                     print(f"⚠️ Erro ao processar áudio: {err_audio}")
 
-            # Mensagem de Texto
+            # Mensagem de texto direta
             elif "text" in data:
                 user_text = data["text"]
 
@@ -87,12 +82,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Gera resposta no Gemini
-                    res = model_gemini.generate_content(prompt_completo)
-                    resposta_texto = res.text
+                    # Cérebro: Resposta via SDK oficial do Gemini 1.5 Flash
+                    response = client_gemini.models.generate_content(
+                        model='gemini-1.5-flash',
+                        contents=prompt_completo,
+                    )
+                    resposta_texto = response.text
                     print(f"👑 Liss respondeu: {resposta_texto}")
                     
-                    # Gera áudio da Liss
+                    # Voz: Geração de áudio neural com Edge-TTS
                     audio_file = "temp_output.mp3"
                     communicate = edge_tts.Communicate(resposta_texto, "pt-BR-FranciscaNeural")
                     await communicate.save(audio_file)
@@ -100,7 +98,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     with open(audio_file, "rb") as f:
                         audio_base64 = base64.b64encode(f.read()).decode('utf-8')
                     
-                    # Envia texto e áudio de volta
+                    # Envia texto e áudio pro app
                     await websocket.send_json({
                         "type": "response",
                         "user_text": user_text if "audio" in data else None,
@@ -111,13 +109,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     print(f"⚠️ Erro no Gemini: {err_gemini}")
                     await websocket.send_json({
                         "type": "info",
-                        "message": f"Erro interno da Liss ao pensar: {err_gemini}"
+                        "message": f"Erro interno da Liss ao processar: {err_gemini}"
                     })
 
     except WebSocketDisconnect:
         print("🔴 Liss desconectada.")
     except Exception as e:
-        print(f"⚠️ Erro no servidor: {e}")
+        print(f"⚠️ Erro geral no servidor: {e}")
 
 if __name__ == "__main__":
     import uvicorn
