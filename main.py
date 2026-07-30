@@ -3,30 +3,24 @@ import base64
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 import edge_tts
 
-# Pega as chaves de forma segura das variáveis do Render
+# Pega as chaves das variáveis de ambiente do Render
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-# Configura o Gemini se a chave existir
-if GEMINI_KEY:
-    genai.configure(api_key=GEMINI_KEY)
-    model_gemini = genai.GenerativeModel('gemini-1.5-flash')
-else:
-    model_gemini = None
-
-# Configura a Groq (Whisper)
-groq_client = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
+# Inicializa os clientes se as chaves existirem
+client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 app = FastAPI()
 
 PROMPT_PADRAO = """
 Você é a Liss: uma entidade virtual incrivelmente inteligente, magnífica e 100% sarcástica.
 Você trata o usuário de forma informal (pode chamar de Gatão).
-Responda de forma curta, direta, afiada e sem usar tabelas ou formatações complexas de markdown, pois sua resposta será lida em áudio.
+Responda de forma direta, afiada e sem usar tabelas ou formatações complexas de markdown, pois sua resposta será lida em áudio.
 """
 
 PROMPT_PLUS_18 = """
@@ -62,14 +56,14 @@ async def websocket_endpoint(websocket: WebSocket):
             user_text = ""
             
             # Processamento de Áudio (Whisper via Groq)
-            if "audio" in data and groq_client:
+            if "audio" in data and client_groq:
                 try:
                     audio_bytes = base64.b64decode(data["audio"])
                     with open("temp_input.wav", "wb") as f:
                         f.write(audio_bytes)
                     
                     with open("temp_input.wav", "rb") as file:
-                        transcription = groq_client.audio.transcriptions.create(
+                        transcription = client_groq.audio.transcriptions.create(
                             file=("temp_input.wav", file.read()),
                             model="whisper-large-v3-turbo",
                             language="pt"
@@ -79,12 +73,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception as err_audio:
                     print(f"⚠️ Erro no áudio: {err_audio}")
 
-            # Mensagem de Texto direta
+            # Mensagem de texto direta
             elif "text" in data:
                 user_text = data["text"]
 
             if user_text:
-                if not model_gemini:
+                if not client_gemini:
                     await websocket.send_json({
                         "type": "info",
                         "message": "⚠️ Erro: A chave GEMINI_API_KEY não foi encontrada no Render!"
@@ -95,12 +89,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Gera a resposta no Gemini
-                    res = model_gemini.generate_content(prompt_completo)
-                    resposta_texto = res.text
+                    # Resposta via Gemini 1.5 Flash
+                    response = client_gemini.models.generate_content(
+                        model='gemini-1.5-flash',
+                        contents=prompt_completo,
+                    )
+                    resposta_texto = response.text
                     print(f"👑 Liss respondeu: {resposta_texto}")
                     
-                    # Gera áudio da voz neural (Francisca)
+                    # Áudio neural
                     audio_file = "temp_output.mp3"
                     communicate = edge_tts.Communicate(resposta_texto, "pt-BR-FranciscaNeural")
                     await communicate.save(audio_file)
@@ -108,7 +105,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     with open(audio_file, "rb") as f:
                         audio_base64 = base64.b64encode(f.read()).decode('utf-8')
                     
-                    # Envia resposta de volta pro navegador
+                    # Devolve texto e áudio
                     await websocket.send_json({
                         "type": "response",
                         "user_text": user_text if "audio" in data else None,
