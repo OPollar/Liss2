@@ -3,16 +3,21 @@ import base64
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-from google import genai
+import google.generativeai as genai
 from groq import Groq
 import edge_tts
 
-# Pega as chaves das variáveis de ambiente do Render
+# Pega as chaves do Render
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-# Inicializa os clientes das IAs
-client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+# Configura o Gemini com a biblioteca clássica e estável
+if GEMINI_KEY:
+    genai.configure(api_key=GEMINI_KEY)
+    model_gemini = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    model_gemini = None
+
 client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 app = FastAPI()
@@ -46,7 +51,6 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_json()
             
-            # Alternar modo +18
             if "toggle_18" in data:
                 modo_adulto = data["toggle_18"]
                 status = "Ativado 🔥" if modo_adulto else "Desativado"
@@ -55,7 +59,6 @@ async def websocket_endpoint(websocket: WebSocket):
             
             user_text = ""
             
-            # Processamento de Áudio (Whisper via Groq)
             if "audio" in data and client_groq:
                 try:
                     audio_bytes = base64.b64decode(data["audio"])
@@ -73,15 +76,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception as err_audio:
                     print(f"⚠️ Erro no áudio: {err_audio}")
 
-            # Mensagem de texto direta
             elif "text" in data:
                 user_text = data["text"]
 
             if user_text:
-                if not client_gemini:
+                if not model_gemini:
                     await websocket.send_json({
                         "type": "info",
-                        "message": "⚠️ Erro: A chave GEMINI_API_KEY não foi encontrada no Render!"
+                        "message": "⚠️ Erro: Chave GEMINI_API_KEY ausente ou inválida!"
                     })
                     continue
 
@@ -89,15 +91,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                     prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                     
-                    # Nome do modelo corrigido no SDK novo
-                    response = client_gemini.models.generate_content(
-                        model='gemini-2.0-flash',
-                        contents=prompt_completo,
-                    )
+                    response = model_gemini.generate_content(prompt_completo)
                     resposta_texto = response.text
                     print(f"👑 Liss respondeu: {resposta_texto}")
                     
-                    # Áudio neural com a voz da Liss
                     audio_file = "temp_output.mp3"
                     communicate = edge_tts.Communicate(resposta_texto, "pt-BR-FranciscaNeural")
                     await communicate.save(audio_file)
@@ -105,7 +102,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     with open(audio_file, "rb") as f:
                         audio_base64 = base64.b64encode(f.read()).decode('utf-8')
                     
-                    # Devolve texto e áudio
                     await websocket.send_json({
                         "type": "response",
                         "user_text": user_text if "audio" in data else None,
