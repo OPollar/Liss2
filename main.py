@@ -23,20 +23,20 @@ client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 app = FastAPI()
 
 # ---------------------------------------------------------------------------
-# Modelos (Gemini, camada 100% gratuita, sem cartão cadastrado) — a Liss
-# escolhe sozinha qual usar. IMPORTANTE: os modelos da família Gemini 3.x
-# (3.5/3.6/3.1) NÃO têm busca no Google grátis — só a família 2.5 tem,
-# e só nos modelos Flash/Flash-Lite (o 2.5 Pro não tem busca grátis).
-# A Google já avisou que a família 2.5 será desligada em outubro de 2026 —
-# quando chegar perto disso, troque para gemini-3.5-flash e ative billing
-# se quiser manter a busca funcionando.
+# Modelos (Gemini). A família 2.5 foi bloqueada para novos usuários pelo
+# Google (mesmo antes do desligamento oficial de outubro/2026), então
+# usamos a família 3.x, que segue disponível de graça para texto/imagem/áudio.
+# NENHUM modelo tem busca no Google 100% grátis sem billing ativado na conta
+# — por isso a busca fica desligada por padrão. Se você ativar billing no
+# Google AI Studio (ganha 5.000 buscas grátis por mês mesmo assim), pode
+# ligar a busca setando a variável de ambiente BUSCA_WEB_BILLING_ATIVO=true.
 # ---------------------------------------------------------------------------
-MODEL_LEVE = "gemini-2.5-flash-lite"    # respostas rápidas, bate-papo comum
-MODEL_PADRAO = "gemini-2.5-flash"       # equilíbrio: raciocínio + velocidade
-MODEL_PROFUNDO = "gemini-2.5-pro"       # raciocínio pesado, código complexo, análise longa
+MODEL_LEVE = "gemini-3.1-flash-lite"    # respostas rápidas, bate-papo comum
+MODEL_PADRAO = "gemini-3.5-flash"       # equilíbrio: raciocínio + velocidade
+MODEL_PROFUNDO = "gemini-3.5-flash"     # raciocínio pesado (3.1 Pro é pago; ficamos no melhor free)
 
-# modelos que têm busca no Google liberada de graça (sem billing ativado)
-MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO}
+BUSCA_WEB_BILLING_ATIVO = os.environ.get("BUSCA_WEB_BILLING_ATIVO", "false").lower() == "true"
+MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO, MODEL_PROFUNDO} if BUSCA_WEB_BILLING_ATIVO else set()
 
 TTS_VOICE = "pt-BR-FranciscaNeural"
 
@@ -94,11 +94,10 @@ def montar_input(texto: str, imagem_b64: Optional[str]):
 def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: bool) -> tuple[str, str]:
     """Gera a resposta da Liss escolhendo o modelo certo, com fallback em cascata."""
     modelo_escolhido = escolher_modelo(texto, imagem_b64 is not None, modo_profundo)
-    cascata = {
-        MODEL_PROFUNDO: [MODEL_PROFUNDO, MODEL_PADRAO, MODEL_LEVE],
-        MODEL_PADRAO: [MODEL_PADRAO, MODEL_LEVE],
-        MODEL_LEVE: [MODEL_LEVE, MODEL_PADRAO],
-    }[modelo_escolhido]
+    if modelo_escolhido == MODEL_LEVE:
+        cascata = [MODEL_LEVE, MODEL_PADRAO]
+    else:
+        cascata = [modelo_escolhido, MODEL_LEVE]
 
     ultimo_erro = None
     for modelo in cascata:
