@@ -4,171 +4,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shogun AI - Interface</title>
+    <title>Shogun AI - VTuber</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
         body {
-            background-color: #0f0f15;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0b0b10;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: space-between;
-            height: 100vh;
-            margin: 0;
+            min-height: 100vh;
             padding: 20px;
-            box-sizing: border-box;
+        }
+        
+        header {
+            text-align: center;
+            margin-top: 10px;
         }
         
         h1 {
-            color: #a855f7;
-            margin-bottom: 5px;
+            color: #c084fc;
+            font-size: 2rem;
+            letter-spacing: 2px;
+            text-shadow: 0 0 12px rgba(192, 132, 252, 0.4);
         }
-        /* Container da VTuber */
         
-        #vtuber-container {
-            width: 250px;
-            height: 250px;
+        #status {
+            font-size: 0.85rem;
+            color: #22c55e;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+        /* VTuber Container */
+        
+        .vtuber-box {
+            position: relative;
+            width: 220px;
+            height: 220px;
             border-radius: 50%;
-            border: 4px solid #a855f7;
-            box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+            border: 3px solid #c084fc;
+            box-shadow: 0 0 30px rgba(192, 132, 252, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #1a1a24;
-            position: relative;
-            overflow: hidden;
+            background: radial-gradient(circle, #1e1b4b 0%, #0f172a 100%);
+            margin: 20px 0;
         }
-        /* Avatar VTuber Simples em CSS (Expande para Live2D) */
         
         .avatar {
-            font-size: 80px;
-            transition: transform 0.2s;
+            font-size: 90px;
+            user-select: none;
+            transition: transform 0.15s ease;
         }
         
         .speaking {
-            animation: pulse 0.5s infinite alternate;
+            animation: talk 0.3s infinite alternate ease-in-out;
         }
         
-        @keyframes pulse {
+        @keyframes talk {
             0% {
-                transform: scale(1);
+                transform: scale(1) translateY(0);
             }
             100% {
-                transform: scale(1.15);
+                transform: scale(1.12) translateY(-5px);
             }
         }
-        /* Status e Chat Log */
-        
-        #status {
-            font-size: 14px;
-            color: #22c55e;
-            margin-bottom: 10px;
-        }
+        /* Chat Log */
         
         #chat-log {
             width: 100%;
-            max-width: 500px;
-            height: 150px;
-            background: #181824;
-            border-radius: 12px;
-            padding: 10px;
+            max-width: 600px;
+            height: 220px;
+            background: #13131d;
+            border: 1px solid #27273a;
+            border-radius: 16px;
+            padding: 15px;
             overflow-y: auto;
-            font-size: 14px;
-            border: 1px solid #2e2e42;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
         }
-        /* Painel de Controles */
+        
+        .msg {
+            padding: 10px 14px;
+            border-radius: 12px;
+            max-width: 85%;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        
+        .msg.user {
+            background: #312e81;
+            color: #e0e7ff;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+        
+        .msg.shogun {
+            background: #2e1065;
+            color: #f3e8ff;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            border: 1px solid #581c87;
+        }
+        
+        .msg.system {
+            background: transparent;
+            color: #ef4444;
+            align-self: center;
+            font-style: italic;
+            font-size: 0.8rem;
+        }
+        /* Botões */
         
         .controls {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             width: 100%;
-            max-width: 500px;
-            justify-content: center;
+            max-width: 600px;
+            margin-top: 15px;
         }
         
         button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        #btn-speak {
             background: #a855f7;
             color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
         }
         
-        button:hover {
+        #btn-speak:hover {
             background: #9333ea;
         }
-        /* Botão Modo +18 */
         
-        .btn-18 {
-            background: #3f3f5a;
-            border: 1px solid #ef4444;
-            color: #ef4444;
+        #btn-speak.recording {
+            background: #dc2626;
+            animation: pulse-red 1s infinite;
         }
         
-        .btn-18.active {
+        #btn-screen {
+            background: #1e293b;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+        }
+        
+        #btn-screen:hover {
+            background: #334155;
+        }
+        
+        #btn-18 {
+            background: #181824;
+            color: #ef4444;
+            border: 1px solid #7f1d1d;
+        }
+        
+        #btn-18.active {
             background: #ef4444;
             color: white;
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+        
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 12px rgba(220, 38, 38, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <div>
+    <header>
         <h1>👑 SHOGUN AI</h1>
         <div id="status">● Conectado à Nuvem</div>
-    </div>
+    </header>
 
-    <!-- Área da Bonequinha VTuber -->
-    <div id="vtuber-container">
+    <div class="vtuber-box">
         <div id="avatar" class="avatar">🎭</div>
     </div>
 
-    <!-- Log de Conversa -->
     <div id="chat-log">
-        <p><i>Shogun aguardando seu comando...</i></p>
+        <div class="msg shogun">Olá, Gatão. Diga logo o que você quer antes que eu mude de ideia.</div>
     </div>
 
-    <!-- Controles do App -->
     <div class="controls">
-        <button id="btn-speak">🎤 Falar</button>
+        <button id="btn-speak">🎤 Gravar Voz</button>
         <button id="btn-screen">🖥️ Ver Tela</button>
-        <button id="btn-18" class="btn-18">🔥 Modo +18: OFF</button>
+        <button id="btn-18">🔥 Modo +18: OFF</button>
     </div>
 
     <script>
-        // Conexão WebSocket com o seu servidor no Render
         const ws = new WebSocket("wss://liss2.onrender.com/ws");
-
         const avatar = document.getElementById("avatar");
         const chatLog = document.getElementById("chat-log");
         const btn18 = document.getElementById("btn-18");
+        const btnSpeak = document.getElementById("btn-speak");
+
         let modo18 = false;
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
 
-        ws.onopen = () => {
-            console.log("Conectado ao backend!");
-        };
-
-        ws.onmessage = (event) => {
+        ws.onmessage = async(event) => {
             const data = JSON.parse(event.data);
 
             if (data.type === "response") {
-                // Adiciona a resposta no log
-                chatLog.innerHTML += `<p><strong>👑 Shogun:</strong> ${data.text}</p>`;
+                // Adiciona a resposta no chat
+                const msgDiv = document.createElement("div");
+                msgDiv.className = "msg shogun";
+                msgDiv.innerHTML = `<strong>Shogun:</strong> ${data.text}`;
+                chatLog.appendChild(msgDiv);
                 chatLog.scrollTop = chatLog.scrollHeight;
 
-                // Animação da VTuber falando
+                // Anima o avatar VTuber enquanto fala
                 avatar.classList.add("speaking");
-                setTimeout(() => avatar.classList.remove("speaking"), 4000);
+
+                // Se houver áudio gerado, toca automaticamente
+                if (data.audio) {
+                    const audio = new Audio("data:audio/mp3;base64," + data.audio);
+                    audio.play();
+                    audio.onended = () => avatar.classList.remove("speaking");
+                } else {
+                    setTimeout(() => avatar.classList.remove("speaking"), 3000);
+                }
             }
 
             if (data.type === "info") {
-                chatLog.innerHTML += `<p style="color: #ef4444;"><i>${data.message}</i></p>`;
+                const sysDiv = document.createElement("div");
+                sysDiv.className = "msg system";
+                sysDiv.innerText = data.message;
+                chatLog.appendChild(sysDiv);
+                chatLog.scrollTop = chatLog.scrollHeight;
             }
         };
 
@@ -177,21 +269,58 @@
             modo18 = !modo18;
             btn18.classList.toggle("active");
             btn18.innerText = modo18 ? "🔥 Modo +18: ON" : "🔥 Modo +18: OFF";
-
-            // Envia o comando pro servidor mudar a chave de contexto
             ws.send(JSON.stringify({
                 "toggle_18": modo18
             }));
         };
 
-        // Simulação de Envio de Texto/Voz (Ajustaremos para gravação de áudio real no próximo passo)
-        document.getElementById("btn-speak").onclick = () => {
-            const msg = prompt("O que deseja falar para a Shogun?");
-            if (msg) {
-                chatLog.innerHTML += `<p><strong>💬 Você:</strong> ${msg}</p>`;
-                ws.send(JSON.stringify({
-                    "text": msg
-                }));
+        // Gravação de Áudio do Microfone do Celular/PC
+        btnSpeak.onclick = async() => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+
+                    mediaRecorder.onstop = async() => {
+                        const audioBlob = new Blob(audioChunks, {
+                            type: 'audio/wav'
+                        });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => {
+                            const base64Audio = reader.result.split(',')[1];
+
+                            // Adiciona mensagem visual do usuário
+                            const userDiv = document.createElement("div");
+                            userDiv.className = "msg user";
+                            userDiv.innerHTML = "🎤 <i>Áudio enviado...</i>";
+                            chatLog.appendChild(userDiv);
+                            chatLog.scrollTop = chatLog.scrollHeight;
+
+                            // Envia o áudio gravado via WebSocket
+                            ws.send(JSON.stringify({
+                                "audio": base64Audio
+                            }));
+                        };
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    btnSpeak.classList.add("recording");
+                    btnSpeak.innerText = "🛑 Parar e Enviar";
+                } catch (err) {
+                    alert("Erro ao acessar o microfone! Permita o acesso no navegador.");
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                btnSpeak.classList.remove("recording");
+                btnSpeak.innerText = "🎤 Gravar Voz";
             }
         };
     </script>
