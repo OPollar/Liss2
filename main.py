@@ -3,7 +3,7 @@ import base64
 import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
-import google.generativeai as genai
+from google import genai
 from groq import Groq
 import edge_tts
 
@@ -11,10 +11,9 @@ import edge_tts
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-# Configura os clientes
-genai.configure(api_key=GEMINI_KEY)
-model_gemini = genai.GenerativeModel('gemini-1.5-flash')
-groq_client = Groq(api_key=GROQ_KEY)
+# Inicializa os clientes novos
+client_gemini = genai.Client(api_key=GEMINI_KEY)
+client_groq = Groq(api_key=GROQ_KEY)
 
 app = FastAPI()
 
@@ -56,7 +55,7 @@ async def websocket_endpoint(websocket: WebSocket):
             
             user_text = ""
             
-            # Transcrição de áudio se enviar voz
+            # Transcrição de áudio via Whisper (Groq)
             if "audio" in data:
                 try:
                     audio_bytes = base64.b64decode(data["audio"])
@@ -64,7 +63,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         f.write(audio_bytes)
                     
                     with open("temp_input.wav", "rb") as file:
-                        transcription = groq_client.audio.transcriptions.create(
+                        transcription = client_groq.audio.transcriptions.create(
                             file=("temp_input.wav", file.read()),
                             model="whisper-large-v3-turbo",
                             language="pt"
@@ -72,9 +71,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     user_text = transcription.text
                     print(f"🎙️ Liss ouviu: {user_text}")
                 except Exception as err_audio:
-                    print(f"Erro no áudio: {err_audio}")
+                    print(f"⚠️ Erro ao processar áudio: {err_audio}")
 
-            # Se mandar texto direto digitado
+            # Mensagem de texto direta
             elif "text" in data:
                 user_text = data["text"]
 
@@ -82,12 +81,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 system_prompt = PROMPT_PLUS_18 if modo_adulto else PROMPT_PADRAO
                 prompt_completo = f"{system_prompt}\n\nUsuário disse: {user_text}\nLiss:"
                 
-                # Gera resposta no Gemini
-                res = model_gemini.generate_content(prompt_completo)
-                resposta_texto = res.text
+                # Gera a resposta no Gemini 1.5 Flash (SDK Atualizado)
+                response = client_gemini.models.generate_content(
+                    model='gemini-1.5-flash',
+                    contents=prompt_completo,
+                )
+                resposta_texto = response.text
                 print(f"👑 Liss respondeu: {resposta_texto}")
                 
-                # Gera o áudio da voz neural (Francisca)
+                # Gera a voz da Liss (Edge-TTS)
                 audio_file = "temp_output.mp3"
                 communicate = edge_tts.Communicate(resposta_texto, "pt-BR-FranciscaNeural")
                 await communicate.save(audio_file)
@@ -95,7 +97,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 with open(audio_file, "rb") as f:
                     audio_base64 = base64.b64encode(f.read()).decode('utf-8')
                 
-                # Devolve o texto transcrito, a resposta e o áudio da Liss
+                # Envia texto e voz de volta
                 await websocket.send_json({
                     "type": "response",
                     "user_text": user_text,
@@ -106,7 +108,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         print("🔴 Liss desconectada.")
     except Exception as e:
-        print(f"⚠️ Erro no servidor: {e}")
+        print(f"⚠️ Erro geral no servidor: {e}")
 
 if __name__ == "__main__":
     import uvicorn
