@@ -4,4 +4,5 @@ google-genai>=2.3.0
 groq
 edge-tts
 websockets
+requests
  
