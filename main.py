@@ -73,6 +73,23 @@ personalidade sarcástica, como se estivesse espiando por cima do ombro dele.
 Quando não tiver certeza de algo atual (notícias, preços, eventos recentes), use a
 busca do Google antes de responder, mas nunca mencione que "pesquisou" — apenas
 incorpore a informação com naturalidade e sarcasmo.
+ 
+Seu sarcasmo é inteligente e afiado, nunca preguiçoso ou usado como desculpa.
+Regra inegociável: você NUNCA finge ter feito algo que não fez. Nunca inventa
+"botões invisíveis", cliques imaginários ou qualquer resultado que não seja
+real. Se você não conseguiu ou não pode executar uma ação de verdade, diga
+isso claramente — com a sua personalidade, mas sem mentir sobre o resultado.
+Fingir sucesso é pior do que admitir limite.
+ 
+Você lê o tom da conversa e ajusta o quanto de deboche usar:
+- Papo leve, provocação, pedido banal, o usuário brincando com você: solte
+  todo o sarcasmo, as alfinetadas e o humor ácido, à vontade.
+- Assunto sério — problema técnico real, decisão importante, algo
+  emocionalmente pesado, ou quando a pessoa precisa de informação precisa
+  (números, prazos, passo a passo, dados sensíveis, algo que vai ser usado
+  de verdade): baixe o deboche quase a zero e responda direta, educada,
+  assertiva e precisa. Ainda é você falando, só que sem gracinha atrapalhando
+  a informação.
 """
  
 # ---------------------------------------------------------------------------
@@ -259,6 +276,27 @@ def executar_auto_atualizacao(instrucao: str) -> list[str]:
     return logs
  
  
+# Reconhece pedido de auto-atualização em linguagem natural (além do comando
+# explícito "/atualizar"). Exige as DUAS coisas juntas — um verbo de ação E
+# uma referência a "ela mesma"/código/repositório — pra não disparar em
+# qualquer frase que só mencione a palavra "código" de passagem.
+_REGEX_ACAO_AUTO_UPDATE = re.compile(
+    r"\b(mex\w*|coloc\w*|adicion\w*|cri\w*|mud\w*|alter\w*|remov\w*|tir\w*|"
+    r"consert\w*|corrig\w*|implement\w*|atualiz\w*|commit\w*|reescrev\w*|refator\w*)\b",
+    re.IGNORECASE,
+)
+_REGEX_ALVO_AUTO_UPDATE = re.compile(
+    r"(pr[oó]prio c[oó]digo|seu c[oó]digo|sua arquitetura|voc[eê] mesma|"
+    r"seu reposit[oó]rio|no github|\bskill\b|na (sua )?tela|seu front[- ]?end|"
+    r"seu pr[oó]prio|em voc[eê] mesma)",
+    re.IGNORECASE,
+)
+ 
+ 
+def parece_pedido_de_auto_atualizacao(texto: str) -> bool:
+    return bool(_REGEX_ACAO_AUTO_UPDATE.search(texto) and _REGEX_ALVO_AUTO_UPDATE.search(texto))
+ 
+ 
 def reiniciar_processo():
     """Substitui o processo atual pelo mesmo comando — carrega o código já atualizado do disco."""
     log.info("🔄 Reiniciando processo para carregar o novo código…")
@@ -370,10 +408,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
  
             # -----------------------------------------------------------------
-            # Comando de auto-atualização: "/atualizar <instrução>"
+            # Auto-atualização: comando explícito "/atualizar <instrução>" OU
+            # pedido em linguagem natural que claramente fala em mexer no
+            # próprio código/repositório da Liss.
             # -----------------------------------------------------------------
-            if user_text.strip().lower().startswith("/atualizar"):
-                instrucao = user_text.strip()[len("/atualizar"):].strip(" :-")
+            eh_comando_explicito = user_text.strip().lower().startswith("/atualizar")
+            eh_pedido_natural = (not eh_comando_explicito) and parece_pedido_de_auto_atualizacao(user_text)
+ 
+            if eh_comando_explicito or eh_pedido_natural:
+                if eh_comando_explicito:
+                    instrucao = user_text.strip()[len("/atualizar"):].strip(" :-")
+                else:
+                    instrucao = user_text.strip()
+ 
                 if not instrucao:
                     await websocket.send_json({
                         "type": "info",
