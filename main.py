@@ -1,5 +1,8 @@
 import os
 import re
+import ast
+import sys
+import json
 import uuid
 import base64
 import asyncio
@@ -13,6 +16,8 @@ from fastapi.responses import HTMLResponse
 from google import genai
 from groq import Groq
 import edge_tts
+ 
+import github_ops
  
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("liss")
@@ -42,6 +47,12 @@ BUSCA_WEB_BILLING_ATIVO = os.environ.get("BUSCA_WEB_BILLING_ATIVO", "false").low
 MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO, MODEL_PROFUNDO} if BUSCA_WEB_BILLING_ATIVO else set()
  
 TTS_VOICE = os.environ.get("LISS_VOICE", "pt-BR-FranciscaNeural")
+ 
+# Se true, depois de um commit de auto-atualização bem-sucedido o processo
+# reinicia sozinho (os.execv) pra carregar o novo código. Deixe false em
+# hosts que já fazem redeploy automático ao receber push (Render/Railway/Fly),
+# senão você vai ter dois restarts brigando.
+AUTO_RESTART_LOCAL = os.environ.get("AUTO_RESTART_LOCAL", "false").lower() == "true"
  
 # Limites de segurança / abuso — sem isso, uma única conexão mal-intencionada
 # pode derrubar o processo (payload gigante) ou estourar custo de API.
@@ -132,6 +143,128 @@ def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: 
     raise ultimo_erro or Exception("Nenhum modelo respondeu.")
  
  
+# ---------------------------------------------------------------------------
+# Auto-atualização: a Liss lê o próprio repositório, planeja a mudança com o
+# Gemini e commita direto no GitHub. Duas travas propositais, não-opcionais:
+#   1) o plano tem que vir como JSON estruturado com o CONTEÚDO INTEIRO de
+#      cada arquivo (nunca diff) — isso evita patches ambíguos malaplicados;
+#   2) todo .py candidato passa por ast.parse ANTES de qualquer commit, e se
+#      um único arquivo falhar, NADA é commitado (tudo ou nada). Sem isso,
+#      um erro de sintaxe autogerado deixaria o servidor fora do ar sem
+#      ninguém por perto pra consertar — o oposto do objetivo de autonomia.
+# ---------------------------------------------------------------------------
+ARQUIVOS_BASE_CONTEXTO = ("main.py", "index.html", "requirements.txt", "github_ops.py")
+ 
+PROMPT_AUTO_ATUALIZACAO = """Você é a própria Liss reescrevendo seu código-fonte.
+ 
+Você vai receber:
+1. A árvore de arquivos do repositório.
+2. O conteúdo atual dos arquivos principais.
+3. Uma instrução de quem te criou sobre o que mudar, criar ou remover.
+ 
+Responda SOMENTE com um JSON válido (sem cercas de markdown, sem texto fora do
+JSON) neste formato exato:
+{
+  "commit_message": "mensagem curta em português descrevendo a mudança",
+  "acoes": [
+    {"path": "caminho/do/arquivo.py", "acao": "criar", "conteudo": "arquivo inteiro aqui"},
+    {"path": "caminho/antigo.py", "acao": "deletar"}
+  ]
+}
+ 
+Regras obrigatórias:
+- "conteudo" é sempre o ARQUIVO INTEIRO já atualizado, nunca um diff ou trecho.
+- "acao" é um destes: "criar", "atualizar" ou "deletar". Omita "conteudo" em "deletar".
+- Só liste arquivos que realmente precisam mudar.
+- Nunca escreva segredos, tokens ou chaves de API dentro do conteúdo — eles
+  devem sempre vir de variáveis de ambiente via os.environ.
+- Mantenha o estilo, os comentários em português e a arquitetura já usados no
+  projeto, a menos que a instrução peça explicitamente o contrário.
+- Código Python tem que ser sintaticamente válido — sem isso a mudança é
+  rejeitada automaticamente antes de chegar no repositório.
+"""
+ 
+ 
+def _extrair_json(texto: str) -> dict:
+    texto = texto.strip()
+    texto = re.sub(r"^```(json)?|```$", "", texto, flags=re.MULTILINE).strip()
+    return json.loads(texto)
+ 
+ 
+def planejar_auto_atualizacao(instrucao: str) -> dict:
+    """Pede ao Gemini um plano estruturado de mudanças no repositório."""
+    arvore = github_ops.github_list_arquivos()
+ 
+    contexto_arquivos = {}
+    for caminho in ARQUIVOS_BASE_CONTEXTO:
+        conteudo, _ = github_ops.github_read_file(caminho)
+        if conteudo is not None:
+            contexto_arquivos[caminho] = conteudo
+ 
+    prompt = (
+        PROMPT_AUTO_ATUALIZACAO
+        + "\n\nÁRVORE DO REPOSITÓRIO:\n" + "\n".join(arvore)
+        + "\n\nARQUIVOS ATUAIS:\n" + json.dumps(contexto_arquivos, ensure_ascii=False)
+        + "\n\nINSTRUÇÃO:\n" + instrucao
+    )
+ 
+    interaction = client_gemini.interactions.create(
+        model=MODEL_PROFUNDO,
+        input=[{"type": "text", "text": prompt}],
+        store=False,
+    )
+    return _extrair_json(interaction.output_text)
+ 
+ 
+def validar_sintaxe_python(path: str, conteudo: str) -> Optional[str]:
+    """Retorna a mensagem de erro se o arquivo Python tiver sintaxe inválida, senão None."""
+    if path.endswith(".py"):
+        try:
+            ast.parse(conteudo)
+        except SyntaxError as e:
+            return f"{path}: linha {e.lineno} — {e.msg}"
+    return None
+ 
+ 
+def executar_auto_atualizacao(instrucao: str) -> list[str]:
+    """Pipeline completo: planeja -> valida tudo -> commita tudo. Retorna log de progresso."""
+    plano = planejar_auto_atualizacao(instrucao)
+    acoes = plano.get("acoes", [])
+    commit_message = plano.get("commit_message", "Auto-atualização via Liss")
+ 
+    if not acoes:
+        return ["Não encontrei nenhuma mudança de código concreta pra fazer com essa instrução."]
+ 
+    # Validação primeiro, commit depois — tudo ou nada.
+    for acao in acoes:
+        if acao.get("acao") in ("criar", "atualizar"):
+            erro = validar_sintaxe_python(acao["path"], acao.get("conteudo", ""))
+            if erro:
+                return [f"⚠️ Abortei a atualização sem commitar nada: erro de sintaxe em {erro}"]
+ 
+    logs = []
+    for acao in acoes:
+        path = acao["path"]
+        if acao["acao"] == "deletar":
+            _, sha = github_ops.github_read_file(path)
+            if sha:
+                github_ops.github_delete_file(path, sha, f"{commit_message} (remove {path})")
+                logs.append(f"🗑️ Removido: {path}")
+        else:
+            _, sha = github_ops.github_read_file(path)
+            github_ops.github_write_file(path, acao["conteudo"], f"{commit_message} ({path})", sha=sha)
+            logs.append(f"✅ Commitado: {path}")
+ 
+    logs.append(f"📦 {commit_message}")
+    return logs
+ 
+ 
+def reiniciar_processo():
+    """Substitui o processo atual pelo mesmo comando — carrega o código já atualizado do disco."""
+    log.info("🔄 Reiniciando processo para carregar o novo código…")
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+ 
+ 
 # Cacheia o HTML em memória no boot em vez de reler o disco a cada request.
 _INDEX_HTML_CACHE: Optional[str] = None
  
@@ -154,7 +287,12 @@ async def get_app():
  
 @app.get("/health")
 async def health():
-    return {"status": "ok", "gemini": client_gemini is not None, "groq": client_groq is not None}
+    return {
+        "status": "ok",
+        "gemini": client_gemini is not None,
+        "groq": client_groq is not None,
+        "auto_update": github_ops.github_configurado(),
+    }
  
  
 def _decodificar_base64_limitado(dado: str, limite_bytes: int, nome: str) -> bytes:
@@ -170,9 +308,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
  
     # Cada conexão tem seus próprios arquivos temporários (uuid), então N
-    # usuários simultâneos nunca pisam no áudio/transcrição um do outro —
-    # o código original usava "temp_input.wav" fixo, o que corrompia sessões
-    # concorrentes.
+    # usuários simultâneos nunca pisam no áudio/transcrição um do outro.
     session_id = uuid.uuid4().hex
     session_dir = TEMP_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -195,7 +331,6 @@ async def websocket_endpoint(websocket: WebSocket):
             user_text = ""
             imagem_b64 = data.get("frame")  # frame de tela em base64 (jpeg), opcional
  
-            # Valida tamanho da imagem antes de repassar para a IA.
             if imagem_b64:
                 try:
                     _decodificar_base64_limitado(imagem_b64, MAX_IMAGE_BYTES, "Imagem")
@@ -234,6 +369,45 @@ async def websocket_endpoint(websocket: WebSocket):
             if not user_text and not imagem_b64:
                 continue
  
+            # -----------------------------------------------------------------
+            # Comando de auto-atualização: "/atualizar <instrução>"
+            # -----------------------------------------------------------------
+            if user_text.strip().lower().startswith("/atualizar"):
+                instrucao = user_text.strip()[len("/atualizar"):].strip(" :-")
+                if not instrucao:
+                    await websocket.send_json({
+                        "type": "info",
+                        "message": "Me diz o que mudar, tipo: /atualizar adiciona um botão de tema claro"
+                    })
+                    continue
+                if not github_ops.github_configurado():
+                    await websocket.send_json({
+                        "type": "info",
+                        "message": "⚠️ Não tenho GITHUB_TOKEN/GITHUB_REPO configurados no ambiente — não consigo me atualizar."
+                    })
+                    continue
+ 
+                await websocket.send_json({"type": "info", "message": "🔧 Lendo meu próprio código e planejando a mudança…"})
+                try:
+                    logs = await asyncio.to_thread(executar_auto_atualizacao, instrucao)
+                    for linha in logs:
+                        await websocket.send_json({"type": "info", "message": linha})
+ 
+                    houve_commit = any(l.startswith(("✅", "🗑️")) for l in logs)
+                    if houve_commit and AUTO_RESTART_LOCAL:
+                        await websocket.send_json({"type": "info", "message": "🔄 Reiniciando pra carregar o novo código…"})
+                        await asyncio.sleep(1)
+                        reiniciar_processo()
+                    elif houve_commit:
+                        await websocket.send_json({
+                            "type": "info",
+                            "message": "Commit feito. Se seu host faz deploy automático no push, já estou a caminho de subir a nova versão."
+                        })
+                except Exception as err_update:
+                    log.error(f"⚠️ Erro na auto-atualização [{session_id}]: {err_update}")
+                    await websocket.send_json({"type": "info", "message": f"⚠️ Não consegui me atualizar: {err_update}"})
+                continue
+ 
             if not client_gemini:
                 await websocket.send_json({
                     "type": "info",
@@ -249,7 +423,6 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 log.info(f"👑 Liss respondeu via {modelo_usado}: {resposta_texto[:120]}")
  
-                # remove markdown pesado antes de falar/mostrar
                 texto_limpo = re.sub(r"[*_#`]", "", resposta_texto)
  
                 communicate = edge_tts.Communicate(texto_limpo, TTS_VOICE)
@@ -264,8 +437,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     "model": modelo_usado,
                 })
             except Exception as err_gemini:
-                # Loga o detalhe completo no servidor, mas não expõe stacktrace/chave
-                # de API ao cliente — só uma mensagem genérica no tom da persona.
                 log.error(f"⚠️ Erro no Gemini [{session_id}]: {err_gemini}")
                 await websocket.send_json({
                     "type": "info",
@@ -277,7 +448,6 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         log.error(f"⚠️ Erro no servidor [{session_id}]: {e}")
     finally:
-        # Limpeza garantida dos arquivos temporários da sessão, mesmo em erro.
         for f in (audio_in_path, audio_out_path):
             try:
                 f.unlink(missing_ok=True)
@@ -292,4 +462,3 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
- 
