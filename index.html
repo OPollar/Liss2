@@ -8,18 +8,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg: #08080f;
-    --bg-2: #0d0d18;
-    --panel: rgba(255,255,255,0.035);
+    --bg: #050b0a;
+    --bg-2: #091412;
+    --panel: rgba(255,255,255,0.025);
     --panel-strong: rgba(255,255,255,0.05);
-    --panel-border: rgba(180,140,255,0.16);
-    --violet: #b467ff;
-    --violet-deep: #7c3aed;
-    --magenta: #ff4fa3;
-    --cyan: #5eead4;
+    --panel-border: rgba(0,255,204,0.18);
+    --violet: #00ffcc;
+    --violet-deep: #00a887;
+    --magenta: #d946ef;
+    --cyan: #39ff14;
     --amber: #f59e0b;
-    --ink: #ece8fb;
-    --ink-dim: #8b8fa8;
+    --ink: #e6fcf5;
+    --ink-dim: #7da096;
     --mono: 'JetBrains Mono', monospace;
     --display: 'Space Grotesk', sans-serif;
     --body: 'Manrope', sans-serif;
@@ -40,9 +40,9 @@
   .nebula{
     position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
-      radial-gradient(circle at 15% 10%, rgba(124,58,237,0.22), transparent 42%),
-      radial-gradient(circle at 88% 18%, rgba(255,79,163,0.13), transparent 40%),
-      radial-gradient(circle at 40% 95%, rgba(94,234,212,0.09), transparent 50%);
+      radial-gradient(circle at 15% 10%, rgba(0,255,204,0.18), transparent 42%),
+      radial-gradient(circle at 88% 18%, rgba(217,70,239,0.13), transparent 40%),
+      radial-gradient(circle at 40% 95%, rgba(57,255,20,0.08), transparent 50%);
     animation: drift 24s ease-in-out infinite alternate;
   }
   @keyframes drift{
@@ -69,7 +69,7 @@
     display:flex; flex-direction:column;
     padding: 22px 22px 20px;
     border-right:1px solid var(--panel-border);
-    background: linear-gradient(180deg, rgba(180,103,255,0.035), transparent 40%);
+    background: linear-gradient(180deg, rgba(0,255,204,0.035), transparent 40%);
     min-height:0;
   }
  
@@ -85,10 +85,10 @@
   }
   .status-wrap{ display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
   #status{
-    font-family:var(--mono); font-size:0.68rem; color:var(--cyan);
+    font-family:var(--mono); font-size:0.68rem; color:var(--violet);
     display:flex; align-items:center; gap:6px; letter-spacing:0.4px; white-space:nowrap;
   }
-  #status .dot{ width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:blink 2s infinite; flex-shrink:0; }
+  #status .dot{ width:6px; height:6px; border-radius:50%; background:var(--violet); box-shadow:0 0 8px var(--violet); animation:blink 2s infinite; flex-shrink:0; }
   @keyframes blink{ 50%{ opacity:0.4; } }
   #model-tag{
     font-family:var(--mono); font-size:0.64rem; color:var(--ink-dim);
@@ -113,7 +113,7 @@
   .stage.idle #core{ animation: breathe 4s ease-in-out infinite; }
   @keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.045); } }
   .stage.thinking #ring-outer{ animation-duration:2.2s; }
-  .stage.thinking #core{ filter:drop-shadow(0 0 18px var(--cyan)); }
+  .stage.thinking #core{ filter:drop-shadow(0 0 18px var(--violet)); }
   .stage.speaking #core{ filter:drop-shadow(0 0 26px var(--magenta)); }
  
   #avatar-photo{
@@ -131,7 +131,7 @@
  
   #screen-thumb{
     position:fixed; top:16px; right:16px; z-index:6; width:110px; border-radius:10px;
-    border:1px solid var(--violet); box-shadow:0 0 20px rgba(180,103,255,0.35); display:none;
+    border:1px solid var(--violet); box-shadow:0 0 20px rgba(0,255,204,0.35); display:none;
   }
  
   /* ---------- Dock de controles (dentro do console) ---------- */
@@ -141,24 +141,24 @@
   .row{ display:flex; gap:8px; }
   input[type="text"]{
     flex:1; padding:13px 16px; border-radius:12px; border:1px solid var(--panel-border);
-    background:rgba(255,255,255,0.04); color:var(--ink); font-family:var(--body); font-size:0.94rem; outline:none;
+    background:rgba(255,255,255,0.02); color:var(--ink); font-family:var(--body); font-size:0.94rem; outline:none;
     min-width:0;
   }
-  input[type="text"]:focus{ border-color:var(--violet); box-shadow:0 0 0 3px rgba(180,103,255,0.15); }
+  input[type="text"]:focus{ border-color:var(--violet); box-shadow:0 0 0 3px rgba(0,255,204,0.15); }
   button{
     padding:12px 16px; border:none; border-radius:12px; font-weight:600; font-size:0.85rem;
     cursor:pointer; transition:transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease; font-family:var(--body);
   }
   button:hover{ filter:brightness(1.12); }
   button:active{ transform:scale(0.96); }
-  button:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
-  #btn-send{ background:linear-gradient(120deg,var(--violet),var(--violet-deep)); color:#0b0b10; flex-shrink:0; }
-  #btn-speak{ background:rgba(180,103,255,0.14); color:var(--ink); border:1px solid var(--panel-border); flex:1; }
+  button:focus-visible{ outline:2px solid var(--violet); outline-offset:2px; }
+  #btn-send{ background:linear-gradient(120deg,var(--violet),var(--violet-deep)); color:#050b0a; flex-shrink:0; }
+  #btn-speak{ background:rgba(0,255,204,0.1); color:var(--ink); border:1px solid var(--panel-border); flex:1; }
   #btn-speak.recording{ background:#dc2626; color:white; animation:pulse 1s infinite; }
-  #btn-screen{ background:rgba(94,234,212,0.10); color:var(--cyan); border:1px solid rgba(94,234,212,0.25); flex:1; }
-  #btn-screen.active{ background:var(--cyan); color:#06231f; }
-  #btn-deep{ background:rgba(255,79,163,0.08); color:var(--magenta); border:1px solid rgba(255,79,163,0.25); flex:1; }
-  #btn-deep.active{ background:var(--magenta); color:#22030f; }
+  #btn-screen{ background:rgba(217,70,239,0.10); color:var(--magenta); border:1px solid rgba(217,70,239,0.25); flex:1; }
+  #btn-screen.active{ background:var(--magenta); color:#1f0324; }
+  #btn-deep{ background:rgba(57,255,20,0.08); color:var(--cyan); border:1px solid rgba(57,255,20,0.25); flex:1; }
+  #btn-deep.active{ background:var(--cyan); color:#031f02; }
   @keyframes pulse{ 0%{ box-shadow:0 0 0 0 rgba(220,38,38,0.6); } 70%{ box-shadow:0 0 0 10px rgba(220,38,38,0); } 100%{ box-shadow:0 0 0 0 rgba(220,38,38,0); } }
  
   /* ---------- Coluna do chat (usa o resto da tela) ---------- */
@@ -178,8 +178,8 @@
   }
   .msg{ padding:12px 16px; border-radius:14px; max-width:78%; font-size:0.95rem; line-height:1.55; animation:rise 0.25s ease; }
   @keyframes rise{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
-  .msg.user{ background:rgba(124,58,237,0.28); color:#ece8ff; align-self:flex-end; border:1px solid rgba(180,103,255,0.25); }
-  .msg.liss{ background:rgba(255,79,163,0.08); color:#f5e9ff; align-self:flex-start; border:1px solid rgba(255,79,163,0.22); }
+  .msg.user{ background:rgba(0,255,204,0.12); color:#e6fcf5; align-self:flex-end; border:1px solid rgba(0,255,204,0.2); }
+  .msg.liss{ background:rgba(217,70,239,0.08); color:#fdf2ff; align-self:flex-start; border:1px solid rgba(217,70,239,0.18); }
   .msg.system{ background:transparent; color:var(--amber); align-self:center; font-family:var(--mono); font-size:0.72rem; max-width:100%; }
   .msg b{ font-family:var(--mono); font-weight:500; font-size:0.7rem; opacity:0.65; display:block; margin-bottom:4px; letter-spacing:0.5px; }
   audio{ margin-top:6px; height:30px; width:100%; max-width:240px; }
@@ -243,12 +243,12 @@
           <svg id="sigil" viewBox="0 0 220 220">
             <defs>
               <radialGradient id="coreGrad" cx="50%" cy="45%" r="60%">
-                <stop offset="0%" stop-color="#e9d5ff"/>
-                <stop offset="45%" stop-color="#b467ff"/>
-                <stop offset="100%" stop-color="#3b0764"/>
+                <stop offset="0%" stop-color="#e6fffa"/>
+                <stop offset="45%" stop-color="#00ffcc"/>
+                <stop offset="100%" stop-color="#042f2e"/>
               </radialGradient>
             </defs>
-            <g id="ring-ticks" stroke="rgba(180,103,255,0.35)" stroke-width="2">
+            <g id="ring-ticks" stroke="rgba(0,255,204,0.35)" stroke-width="2">
               <line x1="110" y1="6" x2="110" y2="18"/>
               <line x1="110" y1="202" x2="110" y2="214"/>
               <line x1="6" y1="110" x2="18" y2="110"/>
@@ -259,7 +259,7 @@
               <line x1="177" y1="186" x2="168" y2="177"/>
             </g>
             <circle id="ring-outer" cx="110" cy="110" r="96" fill="none" stroke="url(#coreGrad)" stroke-width="1.4" stroke-dasharray="6 10" opacity="0.55"/>
-            <circle cx="110" cy="110" r="78" fill="none" stroke="rgba(255,79,163,0.18)" stroke-width="1"/>
+            <circle cx="110" cy="110" r="78" fill="none" stroke="rgba(217,70,239,0.18)" stroke-width="1"/>
             <circle id="core" cx="110" cy="110" r="58" fill="url(#coreGrad)"/>
           </svg>
           <img id="avatar-photo" alt="retrato">
@@ -472,16 +472,6 @@ btnScreen.onclick = async () => {
   }
 };
  
-function pararTela(){
-  compartilhandoTela = false;
-  ultimoFrame = null;
-  btnScreen.classList.remove("active");
-  btnScreen.textContent = "🖥️ Ver Tela";
-  screenThumb.style.display = "none";
-  if(screenInterval) clearInterval(screenInterval);
-  if(screenStream) screenStream.getTracks().forEach(t => t.stop());
-}
- 
 // --- Gravar voz ---
 btnSpeak.onclick = async () => {
   if(!isRecording){
@@ -514,6 +504,16 @@ btnSpeak.onclick = async () => {
     btnSpeak.textContent = "🎤 Falar";
   }
 };
+ 
+function pararTela(){
+  compartilhandoTela = false;
+  ultimoFrame = null;
+  btnScreen.classList.remove("active");
+  btnScreen.textContent = "🖥️ Ver Tela";
+  screenThumb.style.display = "none";
+  if(screenInterval) clearInterval(screenInterval);
+  if(screenStream) screenStream.getTracks().forEach(t => t.stop());
+}
  
 // --- Editar retrato (avatar) ---
 stage.addEventListener("click", () => {
