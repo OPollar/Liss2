@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from google import genai
+from google.genai import types
 from groq import Groq
 import edge_tts
  
@@ -121,13 +122,18 @@ def escolher_modelo(texto: str, tem_imagem: bool, modo_profundo_forcado: bool) -
  
  
 def montar_input(texto: str, imagem_b64: Optional[str]):
-    partes = [{"type": "text", "text": texto}]
+    partes = []
+    if texto:
+        partes.append(texto)
     if imagem_b64:
-        partes.append({
-            "type": "image",
-            "data": imagem_b64,
-            "mime_type": "image/jpeg",
-        })
+        try:
+            img_bytes = base64.b64decode(imagem_b64)
+            partes.append(types.Part.from_bytes(
+                data=img_bytes,
+                mime_type="image/jpeg",
+            ))
+        except Exception as e:
+            log.error(f"Erro ao decodificar imagem b64 no input: {e}")
     return partes
  
  
@@ -141,17 +147,19 @@ def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: 
  
     ultimo_erro = None
     for modelo in cascata:
-        tools = [{"type": "google_search"}] if modelo in MODELOS_COM_BUSCA_GRATIS else []
+        tools = [{"google_search": {}}] if modelo in MODELOS_COM_BUSCA_GRATIS else None
         try:
-            interaction = client_gemini.interactions.create(
-                model=modelo,
-                input=montar_input(texto, imagem_b64),
+            config = types.GenerateContentConfig(
                 system_instruction=PERSONA_LISS,
                 tools=tools,
-                store=False,
+            )
+            response = client_gemini.models.generate_content(
+                model=modelo,
+                contents=montar_input(texto, imagem_b64),
+                config=config,
             )
             log.info(f"✅ Respondido com {modelo}")
-            return interaction.output_text, modelo
+            return response.text, modelo
         except Exception as e:
             log.warning(f"⚠️ Falha no modelo {modelo}: {e}")
             ultimo_erro = e
@@ -225,12 +233,11 @@ def planejar_auto_atualizacao(instrucao: str) -> dict:
         + "\n\nINSTRUÇÃO:\n" + instrucao
     )
  
-    interaction = client_gemini.interactions.create(
+    response = client_gemini.models.generate_content(
         model=MODEL_PROFUNDO,
-        input=[{"type": "text", "text": prompt}],
-        store=False,
+        contents=prompt,
     )
-    return _extrair_json(interaction.output_text)
+    return _extrair_json(response.text)
  
  
 def validar_sintaxe_python(path: str, conteudo: str) -> Optional[str]:
