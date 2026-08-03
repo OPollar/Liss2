@@ -17,6 +17,7 @@ import edge_tts
 
 import github_ops
 from autoevolucao import Autoevolucao
+from memoria_supabase import LissMemoryManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("liss")
@@ -130,13 +131,17 @@ def montar_input(texto: str, imagem_b64: Optional[str]):
     return partes
 
 
-def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: bool) -> tuple[str, str]:
+def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: bool, contexto_memoria: str = "") -> tuple[str, str]:
     """Gera a resposta da Liss escolhendo o modelo certo, com fallback em cascata."""
     modelo_escolhido = escolher_modelo(texto, imagem_b64 is not None, modo_profundo)
     if modelo_escolhido == MODEL_LEVE:
         cascata = [MODEL_LEVE, MODEL_PADRAO]
     else:
         cascata = [modelo_escolhido, MODEL_LEVE]
+
+    system_instruction = PERSONA_LISS
+    if contexto_memoria:
+        system_instruction += "\n\n" + contexto_memoria
 
     ultimo_erro = None
     for modelo in cascata:
@@ -145,7 +150,7 @@ def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: 
             interaction = client_gemini.interactions.create(
                 model=modelo,
                 input=montar_input(texto, imagem_b64),
-                system_instruction=PERSONA_LISS,
+                system_instruction=system_instruction,
                 tools=tools,
                 store=False,
             )
@@ -171,6 +176,13 @@ def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: 
 #      o oposto do objetivo de autonomia. Ver autoevolucao.py.
 # ---------------------------------------------------------------------------
 motor_evolucao = Autoevolucao(github_ops)
+
+try:
+    memoria = LissMemoryManager()
+    log.info("🧠 Memória Supabase conectada.")
+except Exception as e:
+    memoria = None
+    log.warning(f"⚠️ Memória Supabase indisponível (seguindo sem memória de longo prazo): {e}")
 
 # Reconhece pedido de auto-atualização em linguagem natural (além do comando
 # explícito "/atualizar"). Exige as DUAS coisas juntas — um verbo de ação E
@@ -228,7 +240,18 @@ async def health():
         "gemini": client_gemini is not None,
         "groq": client_groq is not None,
         "auto_update": github_ops.github_configurado(),
+        "memoria": memoria is not None,
     }
+
+
+async def _salvar_e_limpar_memoria(categoria: str, conteudo: str, prioridade: int):
+    """Salva uma memória e roda a faxina automática em background — nunca
+    bloqueia a resposta da Liss, e um erro aqui nunca derruba a conversa."""
+    try:
+        await asyncio.to_thread(memoria.save_memory, categoria, conteudo, prioridade)
+        await asyncio.to_thread(memoria.auto_prune_memories)
+    except Exception as e:
+        log.warning(f"⚠️ Erro salvando/limpando memória em background: {e}")
 
 
 def _decodificar_base64_limitado(dado: str, limite_bytes: int, nome: str) -> bytes:
@@ -345,6 +368,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json({"type": "info", "message": linha})
 
                     houve_merge = any("🔀" in l for l in logs)
+                    if houve_merge and memoria:
+                        resumo = " | ".join(logs)[:2000]
+                        await asyncio.to_thread(memoria.save_memory, "code_update", f"Instrução: {instrucao} — {resumo}", 3)
                     if houve_merge and AUTO_RESTART_LOCAL:
                         await websocket.send_json({"type": "info", "message": "🔄 Reiniciando localmente pra carregar o novo código…"})
                         await asyncio.sleep(1)
@@ -363,9 +389,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
             texto_para_ia = user_text or "Descreva e comente o que você está vendo na tela."
 
+            contexto_memoria = ""
+            if memoria:
+                try:
+                    contexto_memoria = await asyncio.to_thread(memoria.get_recent_context)
+                except Exception as e:
+                    log.warning(f"⚠️ Não consegui buscar contexto de memória: {e}")
+
             try:
                 resposta_texto, modelo_usado = await asyncio.to_thread(
-                    gerar_resposta_gemini, texto_para_ia, imagem_b64, modo_profundo
+                    gerar_resposta_gemini, texto_para_ia, imagem_b64, modo_profundo, contexto_memoria
                 )
                 log.info(f"👑 Liss respondeu via {modelo_usado}: {resposta_texto[:120]}")
 
@@ -382,6 +415,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     "audio": audio_base64,
                     "model": modelo_usado,
                 })
+
+                if memoria:
+                    categoria = "visual" if imagem_b64 else "conversation"
+                    prioridade = 2 if imagem_b64 else 1
+                    conteudo_memoria = f"Usuário: {texto_para_ia} | Liss: {texto_limpo}"
+                    asyncio.create_task(_salvar_e_limpar_memoria(categoria, conteudo_memoria, prioridade))
             except Exception as err_gemini:
                 log.error(f"⚠️ Erro no Gemini [{session_id}]: {err_gemini}")
                 await websocket.send_json({
