@@ -32,25 +32,68 @@ from pathlib import Path
 from typing import Optional
 
 from groq import Groq
+from google import genai
 from github import Github, GithubException
 
 log = logging.getLogger("liss.autoevolucao")
 
 # ---------------------------------------------------------------------------
 # Modelos Groq para geração de código. "qwen-2.5-coder-32b" nunca esteve no
-# catálogo da Groq; "llama-3.3-70b-versatile" foi descontinuado pela Groq
-# (anúncio 17/jun/2026, desligamento em ago/2026). Os dois abaixo são a
-# recomendação atual da própria Groq para workloads de código/raciocínio.
-# Ajustável sem editar código via a env var GROQ_CODE_MODEL.
+# catálogo da Groq (não entra na cascata — só daria 400 sempre). Groq anunciou
+# a descontinuação de "llama-3.3-70b-versatile" em 17/jun/2026 (desligamento
+# previsto ago/2026); mantido como última tentativa da cascata porque ainda
+# pode responder por um tempo, mas não é o modelo principal. Ajustável sem
+# editar código via a env var GROQ_CODE_MODEL.
+#
+# O TPM (tokens por minuto) do tier gratuito é baixo (ex: 8000) — mandar os 5
+# arquivos do projeto inteiros por request estoura isso fácil (visto na
+# prática: 16774 tokens pedidos x 8000 de limite). Por isso, além da cascata
+# de modelos, `_selecionar_arquivos_relevantes` corta o contexto pra só os
+# arquivos que a instrução realmente parece precisar.
 # ---------------------------------------------------------------------------
 CASCATA_MODELOS_GROQ = [
     os.environ.get("GROQ_CODE_MODEL", "openai/gpt-oss-120b"),
     "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
 ]
+
+# Fallback pra Gemini quando a Groq estoura limite de tokens/rate limit — o
+# Gemini aceita payloads bem maiores sem esbarrar em TPM baixo. Mesmo modelo
+# já validado no resto do projeto (ver main.py: a família 1.5 está obsoleta,
+# 2.5 foi bloqueada pro Google, a 3.x é a atual gratuita).
+GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_CODE_FALLBACK_MODEL", "gemini-3.5-flash")
 
 MAX_TENTATIVAS = 3
 TIMEOUT_SANDBOX_SEGUNDOS = 10
 ARQUIVOS_BASE_CONTEXTO = ("main.py", "index.html", "requirements.txt", "github_ops.py", "autoevolucao.py")
+
+# Palavras-chave pra decidir quais arquivos extras (além de main.py, que
+# sempre entra) são relevantes pra instrução — reduz o payload na maioria dos
+# pedidos, já que raramente uma mudança mexe nos 5 arquivos ao mesmo tempo.
+_PALAVRAS_HTML = ("html", "tela", "layout", "botão", "botao", "interface", "front", "css", "visual", "cor", "design", "orb")
+_PALAVRAS_REQUIREMENTS = ("requirements", "dependência", "dependencia", "biblioteca", "pacote", "instalar", "pip")
+_PALAVRAS_GITHUB_OPS = ("github_ops", "leitura do repo", "leitura de arquivo do github")
+_PALAVRAS_AUTOEVOLUCAO = ("autoevolucao", "sandbox", "auto-atualiza", "auto atualiza", "pipeline de atualização", "merge", "pull request", "branch")
+
+
+def _selecionar_arquivos_relevantes(instrucao: str, contexto_arquivos: dict) -> dict:
+    texto = instrucao.lower()
+    selecionados = {}
+    if "main.py" in contexto_arquivos:
+        selecionados["main.py"] = contexto_arquivos["main.py"]
+    if "index.html" in contexto_arquivos and any(p in texto for p in _PALAVRAS_HTML):
+        selecionados["index.html"] = contexto_arquivos["index.html"]
+    if "requirements.txt" in contexto_arquivos and any(p in texto for p in _PALAVRAS_REQUIREMENTS):
+        selecionados["requirements.txt"] = contexto_arquivos["requirements.txt"]
+    if "github_ops.py" in contexto_arquivos and any(p in texto for p in _PALAVRAS_GITHUB_OPS):
+        selecionados["github_ops.py"] = contexto_arquivos["github_ops.py"]
+    if "autoevolucao.py" in contexto_arquivos and any(p in texto for p in _PALAVRAS_AUTOEVOLUCAO):
+        selecionados["autoevolucao.py"] = contexto_arquivos["autoevolucao.py"]
+    # instrução vaga, sem nenhuma palavra-chave extra: inclui o index.html por
+    # ser o caso mais comum de pedido genérico ("melhora isso", "deixa mais bonito")
+    if len(selecionados) <= 1 and "index.html" in contexto_arquivos:
+        selecionados["index.html"] = contexto_arquivos["index.html"]
+    return selecionados
 
 PROMPT_SISTEMA = """Você é o módulo de autoevolução da Liss: uma IA que reescreve o
 próprio código-fonte. Você recebe o conteúdo atual dos arquivos do projeto,
@@ -86,6 +129,8 @@ class Autoevolucao:
         # escrita/branch/PR/merge aqui usam PyGithub, como pedido.
         self._github_ops = github_ops_module
         self._groq = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        self._client_gemini = genai.Client(api_key=gemini_key) if gemini_key else None
         self._gh_client: Optional[Github] = None
 
     # ------------------------------------------------------------------ util
@@ -94,6 +139,16 @@ class Autoevolucao:
         texto = texto.strip()
         texto = re.sub(r"^```(json)?|```$", "", texto, flags=re.MULTILINE).strip()
         return json.loads(texto)
+
+    @staticmethod
+    def _e_erro_de_limite(e: Exception) -> bool:
+        """Detecta erro de rate limit / payload grande demais (413/429/TPM),
+        independente de qual atributo a versão do SDK da Groq expõe."""
+        status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
+        if status in (413, 429):
+            return True
+        texto = str(e).lower()
+        return any(s in texto for s in ("rate_limit", "tokens per minute", "request too large", "413", "429"))
 
     def _repo_pygithub(self):
         if self._gh_client is None:
@@ -107,9 +162,11 @@ class Autoevolucao:
         return self._gh_client.get_repo(nome_repo)
 
     # ---------------------------------------------------------- 1) geração
-    def _gerar_codigo(self, instrucao: str, contexto_arquivos: dict, log_erro_anterior: Optional[str]) -> dict:
+    def _gerar_codigo(self, instrucao: str, contexto_arquivos: dict, log_erro_anterior: Optional[str]) -> tuple[dict, str]:
+        arquivos_relevantes = _selecionar_arquivos_relevantes(instrucao, contexto_arquivos)
+
         prompt = (
-            "ARQUIVOS ATUAIS:\n" + json.dumps(contexto_arquivos, ensure_ascii=False)
+            "ARQUIVOS ATUAIS:\n" + json.dumps(arquivos_relevantes, ensure_ascii=False)
             + "\n\nINSTRUÇÃO:\n" + instrucao
         )
         if log_erro_anterior:
@@ -118,7 +175,9 @@ class Autoevolucao:
                 "EXATAMENTE ISSO:\n" + log_erro_anterior
             )
 
+        houve_erro_de_limite = False
         ultimo_erro = None
+
         for modelo in CASCATA_MODELOS_GROQ:
             try:
                 resposta = self._groq.chat.completions.create(
@@ -130,11 +189,30 @@ class Autoevolucao:
                     temperature=0.2,
                 )
                 texto = resposta.choices[0].message.content
-                return self._extrair_json(texto)
+                return self._extrair_json(texto), f"groq:{modelo}"
             except Exception as e:
                 log.warning(f"⚠️ Groq falhou com {modelo}: {e}")
                 ultimo_erro = e
-        raise ultimo_erro or RuntimeError("Nenhum modelo Groq respondeu.")
+                if self._e_erro_de_limite(e):
+                    houve_erro_de_limite = True
+                continue
+
+        # Todos os modelos da Groq falharam. Se pelo menos uma falha foi por
+        # limite de tokens/rate limit, tenta o Gemini — ele aceita payloads
+        # bem maiores sem esbarrar num TPM baixo de tier gratuito.
+        if houve_erro_de_limite and self._client_gemini:
+            log.info("↪️ Groq estourou limite de tokens — usando Gemini como fallback.")
+            try:
+                interaction = self._client_gemini.interactions.create(
+                    model=GEMINI_FALLBACK_MODEL,
+                    input=[{"type": "text", "text": PROMPT_SISTEMA + "\n\n" + prompt}],
+                    store=False,
+                )
+                return self._extrair_json(interaction.output_text), f"gemini:{GEMINI_FALLBACK_MODEL}"
+            except Exception as e:
+                ultimo_erro = e
+
+        raise ultimo_erro or RuntimeError("Nenhum modelo Groq (nem o fallback Gemini) respondeu.")
 
     # ---------------------------------------------------------- 2) sandbox
     def _testar_sandbox(self, contexto_arquivos: dict, arquivos_novos: dict) -> Optional[str]:
@@ -247,11 +325,12 @@ class Autoevolucao:
         log_erro_anterior: Optional[str] = None
 
         for tentativa in range(1, MAX_TENTATIVAS + 1):
-            logs.append(f"🧠 Tentativa {tentativa}/{MAX_TENTATIVAS}: gerando código com a Groq…")
+            logs.append(f"🧠 Tentativa {tentativa}/{MAX_TENTATIVAS}: gerando código…")
             try:
-                plano = self._gerar_codigo(instrucao, contexto_arquivos, log_erro_anterior)
+                plano, modelo_usado = self._gerar_codigo(instrucao, contexto_arquivos, log_erro_anterior)
+                logs.append(f"   (gerado via {modelo_usado})")
             except Exception as e:
-                logs.append(f"⚠️ A Groq não respondeu: {e}")
+                logs.append(f"⚠️ Nenhum modelo respondeu: {e}")
                 return logs
 
             arquivos_novos = plano.get("arquivos", {})
