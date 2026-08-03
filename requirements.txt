@@ -6,4 +6,5 @@ edge-tts
 websockets
 requests
 PyGithub
+supabase
  
