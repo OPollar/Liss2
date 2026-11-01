@@ -19,7 +19,11 @@ import edge_tts
 
 import github_ops
 from autoevolucao import Autoevolucao
-from memoria_supabase import LissMemoryManager
+try:
+    from memoria_supabase import LissMemoryManager
+except Exception as _e_mem:  # arquivo ausente no repo ou lib "supabase" não instalada
+    LissMemoryManager = None
+    _ERRO_IMPORT_MEMORIA = _e_mem
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("liss")
@@ -277,12 +281,15 @@ async def sintetizar_voz(texto: str) -> Optional[bytes]:
 # ---------------------------------------------------------------------------
 motor_evolucao = Autoevolucao(github_ops)
 
-try:
-    memoria = LissMemoryManager()
-    log.info("🧠 Memória Supabase conectada.")
-except Exception as e:
-    memoria = None
-    log.warning(f"⚠️ Memória Supabase indisponível (seguindo sem memória de longo prazo): {e}")
+memoria = None
+if LissMemoryManager is None:
+    log.warning(f"⚠️ Memória desativada (módulo indisponível): {_ERRO_IMPORT_MEMORIA}")
+else:
+    try:
+        memoria = LissMemoryManager()
+        log.info("🧠 Memória Supabase conectada.")
+    except Exception as e:
+        log.warning(f"⚠️ Memória Supabase indisponível (seguindo sem memória de longo prazo): {e}")
 
 # Reconhece pedido de auto-atualização em linguagem natural (além do comando
 # explícito "/atualizar"). Exige as DUAS coisas juntas — um verbo de ação E
