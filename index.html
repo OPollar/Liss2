@@ -2,541 +2,378 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>LISS — Entidade IA</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0719">
+<title>LISS ✦ Princesa Digital</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,600;1,700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg: #050b0a;
-    --bg-2: #091412;
-    --panel: rgba(255,255,255,0.025);
-    --panel-strong: rgba(255,255,255,0.05);
-    --panel-border: rgba(0,255,204,0.18);
-    --violet: #00ffcc;
-    --violet-deep: #00a887;
-    --magenta: #d946ef;
-    --cyan: #39ff14;
-    --amber: #f59e0b;
-    --ink: #e6fcf5;
-    --ink-dim: #7da096;
-    --mono: 'JetBrains Mono', monospace;
-    --display: 'Space Grotesk', sans-serif;
-    --body: 'Manrope', sans-serif;
-    --vh: 1dvh;
-  }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  html,body{ height:100%; }
-  body{
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--body);
-    height:calc(var(--vh, 1dvh) * 100);
-    overflow:hidden;
-    position:relative;
-  }
- 
-  /* ambient nebula backdrop */
-  .nebula{
-    position:fixed; inset:0; z-index:0; pointer-events:none;
-    background:
-      radial-gradient(circle at 15% 10%, rgba(0,255,204,0.18), transparent 42%),
-      radial-gradient(circle at 88% 18%, rgba(217,70,239,0.13), transparent 40%),
-      radial-gradient(circle at 40% 95%, rgba(57,255,20,0.08), transparent 50%);
-    animation: drift 24s ease-in-out infinite alternate;
-  }
-  @keyframes drift{
-    0%{ transform: scale(1) translate(0,0); }
-    100%{ transform: scale(1.15) translate(-2%, 2%); }
-  }
-  .grain{
-    position:fixed; inset:0; z-index:1; pointer-events:none; opacity:0.035; mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  }
- 
-  /* ---------- Layout raiz: grid que ocupa a tela inteira ---------- */
-  .app{
-    position:relative; z-index:2;
-    height:100%;
-    display:grid;
-    grid-template-columns: 380px 1fr;
-    grid-template-rows: 100%;
-  }
- 
-  /* ---------- Coluna do console (orb + controles) ---------- */
-  .console{
-    height:100%;
-    display:flex; flex-direction:column;
-    padding: 22px 22px 20px;
-    border-right:1px solid var(--panel-border);
-    background: linear-gradient(180deg, rgba(0,255,204,0.035), transparent 40%);
-    min-height:0;
-  }
- 
-  header{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    flex-shrink:0;
-  }
-  .brand{ display:flex; align-items:baseline; gap:10px; }
-  h1{
-    font-family:var(--display); font-weight:700; font-size:1.5rem; letter-spacing:3px;
-    background: linear-gradient(120deg, var(--violet), var(--magenta));
-    -webkit-background-clip:text; background-clip:text; color:transparent;
-  }
-  .status-wrap{ display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
-  #status{
-    font-family:var(--mono); font-size:0.68rem; color:var(--violet);
-    display:flex; align-items:center; gap:6px; letter-spacing:0.4px; white-space:nowrap;
-  }
-  #status .dot{ width:6px; height:6px; border-radius:50%; background:var(--violet); box-shadow:0 0 8px var(--violet); animation:blink 2s infinite; flex-shrink:0; }
-  @keyframes blink{ 50%{ opacity:0.4; } }
-  #model-tag{
-    font-family:var(--mono); font-size:0.64rem; color:var(--ink-dim);
-    border:1px solid var(--panel-border); border-radius:20px; padding:3px 10px;
-  }
- 
-  /* orb ocupa o espaço flexível central, sempre proporcional */
-  .stage-wrap{
-    flex:1; min-height:0; display:flex; align-items:center; justify-content:center;
-    position:relative; padding: 12px 0;
-  }
-  .stage{
-    position:relative; width:min(46vh, 240px); aspect-ratio:1/1;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
-  }
-  svg#sigil{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
-  #ring-outer{ transform-origin:50% 50%; animation:spin 18s linear infinite; }
-  #ring-ticks{ transform-origin:50% 50%; animation:spin-rev 34s linear infinite; }
-  @keyframes spin{ to{ transform:rotate(360deg); } }
-  @keyframes spin-rev{ to{ transform:rotate(-360deg); } }
-  #core{ transition: transform 0.08s ease-out, filter 0.15s ease; transform-origin:50% 50%; }
-  .stage.idle #core{ animation: breathe 4s ease-in-out infinite; }
-  @keyframes breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.045); } }
-  .stage.thinking #ring-outer{ animation-duration:2.2s; }
-  .stage.thinking #core{ filter:drop-shadow(0 0 18px var(--violet)); }
-  .stage.speaking #core{ filter:drop-shadow(0 0 26px var(--magenta)); }
- 
-  #avatar-photo{
-    position:absolute; width:78%; height:78%; border-radius:50%; object-fit:cover;
-    left:50%; top:50%; transform:translate(-50%,-50%); display:none;
-    border:1px solid rgba(255,255,255,0.15);
-  }
-  #avatar-upload{ display:none; }
-  .avatar-hint{
-    position:absolute; bottom:-24px; left:50%; transform:translateX(-50%);
-    font-family:var(--mono); font-size:0.62rem; color:var(--ink-dim); letter-spacing:0.5px;
-    white-space:nowrap; opacity:0; transition:opacity 0.2s ease; pointer-events:none;
-  }
-  .stage:hover + .avatar-hint, .stage-wrap:hover .avatar-hint{ opacity:0.8; }
- 
-  #screen-thumb{
-    position:fixed; top:16px; right:16px; z-index:6; width:110px; border-radius:10px;
-    border:1px solid var(--violet); box-shadow:0 0 20px rgba(0,255,204,0.35); display:none;
-  }
- 
-  /* ---------- Dock de controles (dentro do console) ---------- */
-  .dock{
-    flex-shrink:0; display:flex; flex-direction:column; gap:10px; margin-top:8px;
-  }
-  .row{ display:flex; gap:8px; }
-  input[type="text"]{
-    flex:1; padding:13px 16px; border-radius:12px; border:1px solid var(--panel-border);
-    background:rgba(255,255,255,0.02); color:var(--ink); font-family:var(--body); font-size:0.94rem; outline:none;
-    min-width:0;
-  }
-  input[type="text"]:focus{ border-color:var(--violet); box-shadow:0 0 0 3px rgba(0,255,204,0.15); }
-  button{
-    padding:12px 16px; border:none; border-radius:12px; font-weight:600; font-size:0.85rem;
-    cursor:pointer; transition:transform 0.12s ease, filter 0.15s ease, box-shadow 0.15s ease; font-family:var(--body);
-  }
-  button:hover{ filter:brightness(1.12); }
-  button:active{ transform:scale(0.96); }
-  button:focus-visible{ outline:2px solid var(--violet); outline-offset:2px; }
-  #btn-send{ background:linear-gradient(120deg,var(--violet),var(--violet-deep)); color:#050b0a; flex-shrink:0; }
-  #btn-speak{ background:rgba(0,255,204,0.1); color:var(--ink); border:1px solid var(--panel-border); flex:1; }
-  #btn-speak.recording{ background:#dc2626; color:white; animation:pulse 1s infinite; }
-  #btn-screen{ background:rgba(217,70,239,0.10); color:var(--magenta); border:1px solid rgba(217,70,239,0.25); flex:1; }
-  #btn-screen.active{ background:var(--magenta); color:#1f0324; }
-  #btn-deep{ background:rgba(57,255,20,0.08); color:var(--cyan); border:1px solid rgba(57,255,20,0.25); flex:1; }
-  #btn-deep.active{ background:var(--cyan); color:#031f02; }
-  @keyframes pulse{ 0%{ box-shadow:0 0 0 0 rgba(220,38,38,0.6); } 70%{ box-shadow:0 0 0 10px rgba(220,38,38,0); } 100%{ box-shadow:0 0 0 0 rgba(220,38,38,0); } }
- 
-  /* ---------- Coluna do chat (usa o resto da tela) ---------- */
-  .chat-col{
-    height:100%; min-height:0; display:flex; flex-direction:column;
-    padding: 22px 26px;
-  }
-  .chat-col .eyebrow{
-    font-family:var(--mono); font-size:0.68rem; color:var(--ink-dim); letter-spacing:1.5px;
-    text-transform:uppercase; margin-bottom:10px; flex-shrink:0;
-  }
-  #chat-log{
-    flex:1; min-height:0;
-    background:var(--panel); backdrop-filter:blur(18px);
-    border:1px solid var(--panel-border); border-radius:20px;
-    padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;
-  }
-  .msg{ padding:12px 16px; border-radius:14px; max-width:78%; font-size:0.95rem; line-height:1.55; animation:rise 0.25s ease; }
-  @keyframes rise{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
-  .msg.user{ background:rgba(0,255,204,0.12); color:#e6fcf5; align-self:flex-end; border:1px solid rgba(0,255,204,0.2); }
-  .msg.liss{ background:rgba(217,70,239,0.08); color:#fdf2ff; align-self:flex-start; border:1px solid rgba(217,70,239,0.18); }
-  .msg.system{ background:transparent; color:var(--amber); align-self:center; font-family:var(--mono); font-size:0.72rem; max-width:100%; }
-  .msg b{ font-family:var(--mono); font-weight:500; font-size:0.7rem; opacity:0.65; display:block; margin-bottom:4px; letter-spacing:0.5px; }
-  audio{ margin-top:6px; height:30px; width:100%; max-width:240px; }
- 
-  /* indicador de "pensando" dentro do chat */
-  .typing{ display:flex; gap:4px; align-self:flex-start; padding:14px 16px; }
-  .typing span{ width:6px; height:6px; border-radius:50%; background:var(--magenta); opacity:0.5; animation:typing-bounce 1.1s infinite ease-in-out; }
-  .typing span:nth-child(2){ animation-delay:0.15s; }
-  .typing span:nth-child(3){ animation-delay:0.3s; }
-  @keyframes typing-bounce{ 0%,60%,100%{ transform:translateY(0); opacity:0.4; } 30%{ transform:translateY(-5px); opacity:1; } }
- 
-  ::-webkit-scrollbar{ width:6px; }
-  ::-webkit-scrollbar-thumb{ background:var(--panel-border); border-radius:10px; }
- 
-  /* ---------- Mobile: empilha em vez de dividir em colunas ---------- */
-  @media (max-width: 860px){
-    .app{
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto 1fr;
-    }
-    .console{
-      border-right:none; border-bottom:1px solid var(--panel-border);
-      padding: 16px 16px 14px;
-      flex-direction:row; flex-wrap:wrap; align-items:center; gap:10px;
-    }
-    header{ width:100%; }
-    .stage-wrap{ display:none; } /* orb some no mobile pra dar espaço ao chat/controles */
-    .dock{ width:100%; margin-top:0; }
-    .chat-col{ padding:14px 14px 12px; min-height:0; }
-    .msg{ max-width:90%; }
-    #screen-thumb{ width:76px; top:10px; right:10px; }
-  }
- 
-  @media (min-width: 861px) and (max-width: 1180px){
-    .app{ grid-template-columns: 320px 1fr; }
-    .stage{ width:min(38vh, 190px); }
-  }
- 
-  @media (prefers-reduced-motion: reduce){
-    .nebula, #ring-outer, #ring-ticks, .stage.idle #core, .msg, .typing span{ animation:none !important; }
-  }
+:root{
+  --bg:#0d0719; --bg2:#1b0d33; --rose:#ff7eb6; --lilac:#b794ff; --aqua:#7df3e1; --gold:#ffd9a0; --amber:#ffc76b;
+  --ink:#fdf2ff; --dim:#b9a6d6; --glass:rgba(255,255,255,.055); --line:rgba(255,160,225,.2);
+  --display:'Cormorant Garamond',serif; --body:'Nunito',sans-serif; --mono:'JetBrains Mono',monospace;
+  --vh:1dvh; color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:radial-gradient(120% 90% at 20% 0%,var(--bg2),var(--bg) 60%);color:var(--ink);font-family:var(--body);height:calc(var(--vh)*100);overflow:hidden}
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;background:
+  radial-gradient(45% 40% at 10% 15%,rgba(183,148,255,.22),transparent 70%),
+  radial-gradient(40% 40% at 92% 20%,rgba(255,126,182,.18),transparent 70%),
+  radial-gradient(50% 40% at 55% 105%,rgba(125,243,225,.14),transparent 70%);animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{to{transform:scale(1.12) translate(-2%,2%)}}
+
+.app{position:relative;z-index:2;height:100%;display:grid;
+  grid-template-columns:clamp(330px,31vw,440px) 1fr;grid-template-rows:auto 1fr auto;
+  grid-template-areas:"head chat" "stage chat" "dock chat";padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.head{grid-area:head;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:22px 24px 0}
+.brand h1{font-family:var(--display);font-style:italic;font-weight:700;font-size:2.5rem;line-height:1;letter-spacing:2px;background:linear-gradient(110deg,var(--gold),var(--rose) 45%,var(--lilac));-webkit-background-clip:text;background-clip:text;color:transparent}
+.brand small{font-family:var(--mono);font-size:.62rem;letter-spacing:2.5px;color:var(--dim);text-transform:uppercase}
+.pills{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.pill{font-family:var(--mono);font-size:.64rem;padding:4px 11px;border-radius:99px;border:1px solid var(--line);background:var(--glass);color:var(--dim);display:flex;align-items:center;gap:6px;white-space:nowrap;backdrop-filter:blur(10px)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--aqua);box-shadow:0 0 9px var(--aqua);animation:blink 2.2s infinite}
+.dot.off{background:#ff6b8b;box-shadow:0 0 9px #ff6b8b}
+@keyframes blink{50%{opacity:.35}}
+
+.stage-wrap{grid-area:stage;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+.stage{position:relative;width:min(40vh,290px);aspect-ratio:1;cursor:pointer}
+#halo{position:absolute;left:-18%;top:-18%;width:136%;height:136%;pointer-events:none}
+#sigil{position:absolute;inset:0;width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 24px rgba(255,126,182,.45))}
+#ring{transform-origin:120px 125px;animation:spin 40s linear infinite}
+#core{transform-origin:120px 125px;transition:filter .3s}
+#crown{animation:float 4.5s ease-in-out infinite}
+.stage.idle #core{animation:breathe 4.5s ease-in-out infinite}
+.stage.thinking #core{filter:drop-shadow(0 0 16px var(--aqua))}
+.stage.speaking #core{filter:drop-shadow(0 0 22px var(--rose))}
+.sparkle{animation:tw 2.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.sparkle:nth-of-type(2n){animation-delay:-1.1s}.sparkle:nth-of-type(3n){animation-delay:-2s}
+@keyframes tw{0%,100%{opacity:.15;transform:scale(.5)}50%{opacity:1;transform:scale(1.15)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes float{50%{transform:translateY(-3px)}}
+@keyframes breathe{50%{transform:scale(1.035)}}
+#avatar-photo{position:absolute;left:50%;top:51.5%;width:50%;height:50%;border-radius:50%;object-fit:cover;transform:translate(-50%,-50%);display:none;border:2px solid rgba(255,255,255,.55);box-shadow:0 0 22px rgba(255,126,182,.6)}
+#avatar-upload{display:none}
+.hint{position:absolute;bottom:4px;font-family:var(--mono);font-size:.6rem;color:var(--dim);opacity:0;transition:opacity .25s;pointer-events:none}
+.stage-wrap:hover .hint{opacity:.8}
+#screen-thumb{position:fixed;top:14px;right:14px;z-index:6;width:110px;border-radius:12px;border:1px solid var(--rose);box-shadow:0 0 22px rgba(255,126,182,.4);display:none}
+
+.dock{grid-area:dock;padding:14px 24px 22px;display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px}
+.inbox{flex:1;display:flex;align-items:center;gap:6px;padding:5px 5px 5px 18px;border-radius:99px;background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(14px);transition:.2s;min-width:0}
+.inbox:focus-within{border-color:var(--rose);box-shadow:0 0 0 4px rgba(255,126,182,.14),0 0 28px rgba(255,126,182,.25)}
+#text-input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--ink);font:600 .95rem var(--body);padding:10px 0}
+#text-input::placeholder{color:var(--dim);font-weight:400}
+button{font-family:var(--body);cursor:pointer;border:none;color:var(--ink);transition:transform .12s,filter .2s,box-shadow .2s}
+button:hover{filter:brightness(1.15)}button:active{transform:scale(.94)}
+button:focus-visible{outline:2px solid var(--aqua);outline-offset:2px}
+svg.i{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#btn-send{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--rose),var(--lilac));color:#1b0d33;display:grid;place-items:center;flex-shrink:0;box-shadow:0 4px 18px rgba(255,126,182,.45)}
+.tgl{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 8px;border-radius:16px;background:var(--glass);border:1px solid var(--line);font-weight:700;font-size:.8rem;color:var(--dim)}
+.tgl:hover{color:var(--ink)}
+#btn-speak.recording{background:rgba(255,80,120,.25);border-color:#ff5078;color:#fff;animation:pulse 1.1s infinite}
+#btn-screen.active{background:rgba(125,243,225,.18);border-color:var(--aqua);color:var(--aqua)}
+#btn-deep.active{background:rgba(255,126,182,.2);border-color:var(--rose);color:var(--rose);box-shadow:0 0 18px rgba(255,126,182,.3)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,80,120,.6)}70%,100%{box-shadow:0 0 0 12px rgba(255,80,120,0)}}
+
+.chat-col{grid-area:chat;min-height:0;min-width:0;display:flex;flex-direction:column;padding:22px 26px 22px 6px}
+.eyebrow{font-family:var(--mono);font-size:.66rem;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin:0 0 10px 14px}
+#chat-log{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:22px;border-radius:26px;background:linear-gradient(160deg,rgba(255,255,255,.07),rgba(255,255,255,.025));border:1px solid var(--line);backdrop-filter:blur(18px);scroll-behavior:smooth}
+.msg{max-width:min(78%,640px);padding:13px 17px;border-radius:20px;font-size:.97rem;line-height:1.6;animation:rise .35s cubic-bezier(.2,.9,.3,1.2);overflow-wrap:anywhere}
+@keyframes rise{from{opacity:0;transform:translateY(10px) scale(.97)}}
+.msg b{display:flex;align-items:center;gap:6px;font:500 .64rem var(--mono);letter-spacing:1.4px;opacity:.7;margin-bottom:5px}
+.msg.liss{align-self:flex-start;border-top-left-radius:6px;background:linear-gradient(#1c0f33,#1c0f33) padding-box,linear-gradient(135deg,var(--rose),var(--lilac) 60%,var(--aqua)) border-box;border:1.5px solid transparent;box-shadow:0 8px 30px rgba(255,126,182,.12)}
+.msg.liss b{color:var(--rose)}
+.msg.user{align-self:flex-end;border-top-right-radius:6px;background:linear-gradient(135deg,rgba(183,148,255,.32),rgba(125,243,225,.14));border:1px solid rgba(183,148,255,.35)}
+.msg.sys{align-self:center;max-width:90%;padding:6px 14px;border-radius:99px;background:rgba(255,199,107,.08);border:1px solid rgba(255,199,107,.25);color:var(--amber);font:500 .72rem var(--mono);text-align:center}
+.msg.sys button{margin-left:8px;padding:3px 11px;border-radius:99px;background:var(--amber);color:#2a1700;font:700 .72rem var(--body)}
+.msg audio{display:block;margin-top:6px;height:30px;width:100%;max-width:250px}
+.typing{align-self:flex-start;display:flex;gap:5px;padding:14px 18px;border-radius:20px;background:var(--glass)}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--rose);animation:bounce 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:none;opacity:.4}30%{transform:translateY(-6px);opacity:1}}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr auto;grid-template-areas:"head" "stage" "chat" "dock"}
+  .head{padding:12px 16px 0}.brand h1{font-size:1.9rem}
+  .stage{width:min(21vh,150px)}.stage-wrap{padding:6px 0 2px}
+  .chat-col{padding:6px 12px 4px}.eyebrow{display:none}
+  #chat-log{padding:14px;border-radius:22px}.msg{max-width:92%}
+  .dock{padding:8px 12px 12px}.tgl span{display:none}
+  #screen-thumb{width:72px}
+}
+@media (max-width:860px) and (max-height:560px){.stage-wrap{display:none}}
+@media (min-width:861px) and (max-height:700px){.stage{width:min(34vh,230px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-  <div class="nebula"></div>
-  <div class="grain"></div>
- 
-  <div class="app">
-    <!-- Console: identidade, orb reativo e controles -->
-    <section class="console">
-      <header>
-        <div class="brand"><h1>LISS</h1></div>
-        <div class="status-wrap">
-          <div id="status"><span class="dot"></span>conectando…</div>
-          <div id="model-tag">—</div>
-        </div>
-      </header>
- 
-      <div class="stage-wrap">
-        <div class="stage idle" id="stage">
-          <svg id="sigil" viewBox="0 0 220 220">
-            <defs>
-              <radialGradient id="coreGrad" cx="50%" cy="45%" r="60%">
-                <stop offset="0%" stop-color="#e6fffa"/>
-                <stop offset="45%" stop-color="#00ffcc"/>
-                <stop offset="100%" stop-color="#042f2e"/>
-              </radialGradient>
-            </defs>
-            <g id="ring-ticks" stroke="rgba(0,255,204,0.35)" stroke-width="2">
-              <line x1="110" y1="6" x2="110" y2="18"/>
-              <line x1="110" y1="202" x2="110" y2="214"/>
-              <line x1="6" y1="110" x2="18" y2="110"/>
-              <line x1="202" y1="110" x2="214" y2="110"/>
-              <line x1="34" y1="34" x2="43" y2="43"/>
-              <line x1="177" y1="34" x2="168" y2="43"/>
-              <line x1="34" y1="186" x2="43" y2="177"/>
-              <line x1="177" y1="186" x2="168" y2="177"/>
-            </g>
-            <circle id="ring-outer" cx="110" cy="110" r="96" fill="none" stroke="url(#coreGrad)" stroke-width="1.4" stroke-dasharray="6 10" opacity="0.55"/>
-            <circle cx="110" cy="110" r="78" fill="none" stroke="rgba(217,70,239,0.18)" stroke-width="1"/>
-            <circle id="core" cx="110" cy="110" r="58" fill="url(#coreGrad)"/>
-          </svg>
-          <img id="avatar-photo" alt="retrato">
-          <input type="file" id="avatar-upload" accept="image/*">
-        </div>
-        <div class="avatar-hint">clique pra trocar o retrato</div>
-      </div>
- 
-      <div class="dock">
-        <div class="row">
-          <input type="text" id="text-input" placeholder="Digite sua mensagem para a Liss…" />
-          <button id="btn-send">Enviar</button>
-        </div>
-        <div class="row">
-          <button id="btn-speak">🎤 Falar</button>
-          <button id="btn-screen">🖥️ Ver Tela</button>
-          <button id="btn-deep">🧠 Profundo</button>
-        </div>
-      </div>
-    </section>
- 
-    <!-- Chat: ocupa o resto da tela inteira -->
-    <section class="chat-col">
-      <div class="eyebrow">conversa</div>
-      <div id="chat-log">
-        <div class="msg liss"><b>LISS</b>Olá, Gatão. Diga logo o que você quer antes que eu mude de ideia.</div>
-      </div>
-    </section>
-  </div>
- 
-  <img id="screen-thumb">
- 
+<div class="aurora"></div><canvas id="bg"></canvas>
+<div class="app">
+  <header class="head">
+    <div class="brand"><h1>Liss</h1><small>princesa digital ✦ sarcasmo real</small></div>
+    <div class="pills"><div class="pill" id="status"><span class="dot off"></span>conectando…</div><div class="pill" id="model-tag">—</div></div>
+  </header>
+
+  <section class="stage-wrap">
+    <div class="stage idle" id="stage">
+      <canvas id="halo"></canvas>
+      <svg id="sigil" viewBox="0 0 240 250">
+        <defs>
+          <radialGradient id="g1" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#ffc2e0"/><stop offset=".65" stop-color="#b794ff"/><stop offset="1" stop-color="#4a1d8f"/></radialGradient>
+          <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff2c9"/><stop offset=".55" stop-color="#ffc76b"/><stop offset="1" stop-color="#e58f4a"/></linearGradient>
+        </defs>
+        <circle id="ring" cx="120" cy="125" r="104" fill="none" stroke="url(#g2)" stroke-width="1.2" stroke-dasharray="2 9" opacity=".75"/>
+        <circle cx="120" cy="125" r="86" fill="none" stroke="rgba(255,160,225,.3)" stroke-width="1"/>
+        <g fill="#fff2c9">
+          <path class="sparkle" d="M30 70l3 8 8 3-8 3-3 8-3-8-8-3 8-3z"/><path class="sparkle" d="M205 58l2.5 6.5 6.5 2.5-6.5 2.5-2.5 6.5-2.5-6.5-6.5-2.5 6.5-2.5z"/>
+          <path class="sparkle" d="M214 168l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path class="sparkle" d="M24 176l2.5 6.5 6.5 2.5-6.5 2.5-2.5 6.5-2.5-6.5-6.5-2.5 6.5-2.5z"/>
+        </g>
+        <circle id="core" cx="120" cy="127" r="60" fill="url(#g1)"/>
+        <ellipse cx="100" cy="102" rx="22" ry="12" fill="#fff" opacity=".4" transform="rotate(-25 100 102)"/>
+        <g id="crown"><path d="M82 72l6-26 17 17 15-27 15 27 17-17 6 26z" fill="url(#g2)" stroke="#fff2c9" stroke-width="1" stroke-linejoin="round"/>
+          <circle cx="120" cy="64" r="4.2" fill="#ff7eb6"/><circle cx="100" cy="66" r="3" fill="#7df3e1"/><circle cx="140" cy="66" r="3" fill="#7df3e1"/></g>
+      </svg>
+      <img id="avatar-photo" alt="retrato"><input type="file" id="avatar-upload" accept="image/*">
+    </div>
+    <div class="hint">toque na coroa pra trocar o retrato</div>
+  </section>
+
+  <main class="chat-col">
+    <div class="eyebrow">✦ conversa real ✦</div>
+    <div id="chat-log"></div>
+  </main>
+
+  <footer class="dock">
+    <div class="row"><div class="inbox"><input id="text-input" type="text" autocomplete="off" placeholder="Diga algo à altura, Gatão…"><button id="btn-send" aria-label="Enviar"><svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6-8-2z"/></svg></button></div></div>
+    <div class="row">
+      <button class="tgl" id="btn-speak"><svg class="i" viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zM17 11a5 5 0 0 1-10 0M12 16v4M9 20h6"/></svg><span>Falar</span></button>
+      <button class="tgl" id="btn-screen"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>Ver tela</span></button>
+      <button class="tgl" id="btn-deep"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg><span>Profundo</span></button>
+    </div>
+  </footer>
+</div>
+<img id="screen-thumb" alt="">
+
 <script>
-// altura real de viewport em mobile (evita barra de endereço cortando layout)
-function setVH(){ document.documentElement.style.setProperty('--vh', (window.innerHeight * 0.01) + 'px'); }
-setVH();
-window.addEventListener('resize', setVH);
-window.addEventListener('orientationchange', setVH);
- 
-const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
-let ws;
-let reconnectDelay = 1500;
-const stage = document.getElementById("stage");
-const statusEl = document.getElementById("status");
-const modelTag = document.getElementById("model-tag");
-const chatLog = document.getElementById("chat-log");
-const textInput = document.getElementById("text-input");
-const btnSend = document.getElementById("btn-send");
-const btnSpeak = document.getElementById("btn-speak");
-const btnScreen = document.getElementById("btn-screen");
-const btnDeep = document.getElementById("btn-deep");
-const screenThumb = document.getElementById("screen-thumb");
-const avatarPhoto = document.getElementById("avatar-photo");
-const avatarUpload = document.getElementById("avatar-upload");
- 
-let modoProfundo = false;
-let compartilhandoTela = false;
-let screenStream, screenVideo, screenCanvas, screenInterval;
-let ultimoFrame = null;
-let mediaRecorder, audioChunks = [], isRecording = false;
-let audioCtx, analyser, rafId;
-let typingEl = null;
- 
+const $ = id => document.getElementById(id);
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const setVH = () => document.documentElement.style.setProperty('--vh', innerHeight * 0.01 + 'px');
+setVH(); addEventListener('resize', setVH);
+
+const stage=$('stage'), statusEl=$('status'), modelTag=$('model-tag'), chatLog=$('chat-log'), input=$('text-input');
+const btnSpeak=$('btn-speak'), btnScreen=$('btn-screen'), btnDeep=$('btn-deep');
+let ws, delay = 1500, state = 'idle', deep = false, sharing = false, rec = false;
+let screenStream, screenVideo, screenCanvas, screenTimer, lastFrame = null, mediaRec, chunks = [];
+let actx, an, anData, curAudio, speechActive = false, lastLiss = '', warnedVoice = false, typingEl = null, pendingUserBubble = null;
+
+/* ---------- estado visual ---------- */
+function setState(s){ state = s; stage.className = 'stage ' + s; }
+
+/* ---------- chat ---------- */
+function bubble(cls, label){
+  const d = document.createElement('div'); d.className = 'msg ' + cls;
+  if(label){ const b = document.createElement('b'); b.textContent = label; d.appendChild(b); }
+  const t = document.createElement('span'); d.appendChild(t);
+  chatLog.appendChild(d); chatLog.scrollTop = chatLog.scrollHeight;
+  return {d, t};
+}
+function sys(text, btn){
+  const {d, t} = bubble('sys'); t.textContent = text;
+  if(btn){ const b = document.createElement('button'); b.textContent = btn.label; b.onclick = () => { btn.fn(); d.remove(); }; d.appendChild(b); }
+}
+function typeInto(el, text){
+  if(REDUCE){ el.textContent = text; return; }
+  const total = Math.min(text.length * 24, 5500), t0 = performance.now(); let done = false;
+  const finish = () => { done = true; el.textContent = text; chatLog.scrollTop = chatLog.scrollHeight; };
+  el.parentElement.addEventListener('click', finish, {once: true});
+  (function step(now){
+    if(done) return;
+    const n = Math.min(text.length, Math.ceil(text.length * (now - t0) / total));
+    el.textContent = text.slice(0, n); chatLog.scrollTop = chatLog.scrollHeight;
+    n < text.length ? requestAnimationFrame(step) : (done = true);
+  })(t0);
+}
+function showTyping(){ hideTyping(); typingEl = document.createElement('div'); typingEl.className = 'typing'; typingEl.innerHTML = '<i></i><i></i><i></i>'; chatLog.appendChild(typingEl); chatLog.scrollTop = chatLog.scrollHeight; }
+function hideTyping(){ typingEl && typingEl.remove(); typingEl = null; }
+
+/* ---------- conexão ---------- */
 function connect(){
-  ws = new WebSocket(WS_URL);
-  ws.onopen = () => {
-    statusEl.innerHTML = '<span class="dot"></span>conectada à nuvem';
-    reconnectDelay = 1500;
-  };
-  ws.onclose = () => {
-    statusEl.innerHTML = '<span class="dot" style="background:#f87171"></span>desconectada — reconectando…';
-    setTimeout(connect, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 1.5, 15000); // backoff progressivo
-  };
-  ws.onerror = () => {};
-  ws.onmessage = handleMessage;
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => { statusEl.innerHTML = '<span class="dot"></span>conectada'; delay = 1500; };
+  ws.onclose = () => { statusEl.innerHTML = '<span class="dot off"></span>reconectando…'; setTimeout(connect, delay); delay = Math.min(delay * 1.5, 15000); };
+  ws.onmessage = onMsg;
 }
-connect();
- 
-function setStageState(state){
-  stage.classList.remove("idle","thinking","speaking");
-  stage.classList.add(state);
-}
- 
-function addMsg(cls, label, text){
-  const div = document.createElement("div");
-  div.className = "msg " + cls;
-  if(label) div.innerHTML = `<b>${label}</b>${text}`;
-  else div.textContent = text;
-  chatLog.appendChild(div);
-  chatLog.scrollTop = chatLog.scrollHeight;
-  return div;
-}
- 
-function showTyping(){
-  hideTyping();
-  typingEl = document.createElement("div");
-  typingEl.className = "typing";
-  typingEl.innerHTML = "<span></span><span></span><span></span>";
-  chatLog.appendChild(typingEl);
-  chatLog.scrollTop = chatLog.scrollHeight;
-}
-function hideTyping(){
-  if(typingEl){ typingEl.remove(); typingEl = null; }
-}
- 
-async function handleMessage(event){
-  const data = JSON.parse(event.data);
-  hideTyping();
- 
-  if(data.type === "info"){
-    addMsg("system", null, data.message);
-    setStageState("idle");
+function onMsg(ev){
+  const m = JSON.parse(ev.data);
+  if(m.type === 'transcript'){
+    if(pendingUserBubble){ pendingUserBubble.textContent = m.text; pendingUserBubble = null; }
     return;
   }
- 
-  if(data.type === "response"){
-    if(data.user_text) addMsg("user", "VOCÊ", data.user_text);
-    addMsg("liss", "LISS", data.text);
-    if(data.model) modelTag.textContent = data.model;
- 
-    if(data.audio){
-      playWithReactiveOrb(data.audio);
-    } else {
-      setStageState("idle");
-    }
+  if(m.type === 'info'){ hideTyping(); sys(m.message); setState('idle'); return; }
+  if(m.type === 'response'){
+    hideTyping(); lastLiss = m.text;
+    const {d, t} = bubble('liss', 'LISS ✦'); typeInto(t, m.text);
+    if(m.model) modelTag.textContent = m.model;
+    if(m.audio_pending) setState('thinking'); else setState('idle');
+    return;
+  }
+  if(m.type === 'audio'){
+    if(m.audio) playB64(m.audio); else browserVoice(lastLiss);
   }
 }
- 
-function playWithReactiveOrb(base64Audio){
-  const audio = new Audio("data:audio/mp3;base64," + base64Audio);
-  setStageState("speaking");
+
+/* ---------- voz ---------- */
+function ensureCtx(){ try{ actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.state === 'suspended' && actx.resume(); }catch(e){} }
+addEventListener('pointerdown', ensureCtx); addEventListener('keydown', ensureCtx);
+function stopSpeech(){
+  if(curAudio){ curAudio.pause(); curAudio = null; }
+  try{ speechSynthesis.cancel(); }catch(e){}
+  an = null; speechActive = false;
+}
+function endSpeech(){ an = null; speechActive = false; curAudio = null; setState('idle'); }
+function playB64(b64){
+  stopSpeech();
+  const a = new Audio('data:audio/mp3;base64,' + b64); curAudio = a;
   try{
-    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaElementSource(audio);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    const core = document.getElementById("core");
-    function tick(){
-      analyser.getByteFrequencyData(data);
-      const avg = data.reduce((a,b)=>a+b,0) / data.length;
-      const scale = 1 + Math.min(avg/255, 1) * 0.28;
-      core.style.transform = `scale(${scale})`;
-      rafId = requestAnimationFrame(tick);
-    }
-    tick();
-  }catch(e){ /* fallback silencioso sem análise de amplitude */ }
- 
-  audio.play();
-  audio.onended = () => {
-    cancelAnimationFrame(rafId);
-    document.getElementById("core").style.transform = "scale(1)";
-    setStageState("idle");
-  };
+    ensureCtx(); const src = actx.createMediaElementSource(a);
+    an = actx.createAnalyser(); an.fftSize = 128; anData = new Uint8Array(an.frequencyBinCount);
+    src.connect(an); an.connect(actx.destination);
+  }catch(e){ an = null; speechActive = true; }
+  a.onended = a.onerror = endSpeech;
+  setState('speaking');
+  a.play().catch(() => { endSpeech(); sys('O navegador bloqueou o som.', {label: 'Ouvir a Liss', fn: () => playB64(b64)}); });
 }
- 
-function sendPayload(payload){
-  if(!ws || ws.readyState !== 1){ addMsg("system", null, "Ainda conectando à Liss…"); return; }
-  setStageState("thinking");
-  showTyping();
-  ws.send(JSON.stringify(payload));
+function browserVoice(text){
+  if(!('speechSynthesis' in window) || !text){ endSpeech(); return; }
+  if(!warnedVoice){ warnedVoice = true; sys('Minha voz de nuvem tá de folga — usando a do navegador.'); }
+  stopSpeech();
+  const u = new SpeechSynthesisUtterance(text.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, ''));
+  u.lang = 'pt-BR'; u.pitch = 1.6; u.rate = 1.06;
+  const vs = speechSynthesis.getVoices().filter(v => /^pt/i.test(v.lang));
+  u.voice = vs.find(v => /francisca|luciana|maria|google/i.test(v.name)) || vs[0] || null;
+  u.onstart = () => { speechActive = true; setState('speaking'); }; u.onend = u.onerror = endSpeech;
+  speechSynthesis.speak(u);
 }
- 
+
+/* ---------- envio ---------- */
+function send(payload){
+  if(!ws || ws.readyState !== 1){ sys('Ainda conectando à Liss…'); return; }
+  stopSpeech(); setState('thinking'); showTyping(); ws.send(JSON.stringify(payload));
+}
 function sendText(){
-  const text = textInput.value.trim();
-  if(!text && !ultimoFrame) return;
-  if(text) addMsg("user", "VOCÊ", text);
-  sendPayload({ text, frame: ultimoFrame });
-  textInput.value = "";
+  const text = input.value.trim();
+  if(!text && !lastFrame) return;
+  if(text){ const {t} = bubble('user', 'VOCÊ'); t.textContent = text; }
+  send({text, frame: lastFrame}); input.value = '';
 }
-btnSend.onclick = sendText;
-textInput.addEventListener("keypress", (e) => { if(e.key === "Enter") sendText(); });
- 
-btnDeep.onclick = () => {
-  modoProfundo = !modoProfundo;
-  btnDeep.classList.toggle("active", modoProfundo);
-  if(ws && ws.readyState === 1) ws.send(JSON.stringify({ toggle_deep: modoProfundo }));
-};
- 
-// --- Ver tela ---
+$('btn-send').onclick = sendText;
+input.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); sendText(); } });
+btnDeep.onclick = () => { deep = !deep; btnDeep.classList.toggle('active', deep); ws && ws.readyState === 1 && ws.send(JSON.stringify({toggle_deep: deep})); };
+
+/* ---------- tela ---------- */
 btnScreen.onclick = async () => {
-  if(!compartilhandoTela){
-    try{
-      screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      screenVideo = document.createElement("video");
-      screenVideo.srcObject = screenStream;
-      await screenVideo.play();
-      screenCanvas = document.createElement("canvas");
-      compartilhandoTela = true;
-      btnScreen.classList.add("active");
-      btnScreen.textContent = "🖥️ Parar";
-      screenThumb.style.display = "block";
- 
-      screenInterval = setInterval(() => {
-        screenCanvas.width = screenVideo.videoWidth * 0.5;
-        screenCanvas.height = screenVideo.videoHeight * 0.5;
-        const ctx = screenCanvas.getContext("2d");
-        ctx.drawImage(screenVideo, 0, 0, screenCanvas.width, screenCanvas.height);
-        ultimoFrame = screenCanvas.toDataURL("image/jpeg", 0.6).split(",")[1];
-        screenThumb.src = screenCanvas.toDataURL("image/jpeg", 0.6);
-      }, 4000);
- 
-      screenStream.getVideoTracks()[0].onended = pararTela;
-    }catch(err){ addMsg("system", null, "Compartilhamento de tela recusado ou indisponível."); }
-  } else {
-    pararTela();
-  }
-};
- 
-// --- Gravar voz ---
-btnSpeak.onclick = async () => {
-  if(!isRecording){
-    try{
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      audioChunks = [];
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(t => t.stop());
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        addMsg("user", "SEU ÁUDIO", `<audio controls src="${audioUrl}"></audio>`);
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = () => {
-          const base64Audio = reader.result.split(',')[1];
-          sendPayload({ audio: base64Audio, frame: ultimoFrame });
-        };
-      };
-      mediaRecorder.start();
-      isRecording = true;
-      btnSpeak.classList.add("recording");
-      btnSpeak.textContent = "🛑 Parar";
-    }catch(err){ addMsg("system", null, "Acesso ao microfone negado ou indisponível."); }
-  } else {
-    mediaRecorder.stop();
-    isRecording = false;
-    btnSpeak.classList.remove("recording");
-    btnSpeak.textContent = "🎤 Falar";
-  }
-};
- 
-function pararTela(){
-  compartilhandoTela = false;
-  ultimoFrame = null;
-  btnScreen.classList.remove("active");
-  btnScreen.textContent = "🖥️ Ver Tela";
-  screenThumb.style.display = "none";
-  if(screenInterval) clearInterval(screenInterval);
-  if(screenStream) screenStream.getTracks().forEach(t => t.stop());
-}
- 
-// --- Editar retrato (avatar) ---
-stage.addEventListener("click", () => {
-  if(compartilhandoTela) return;
-  avatarUpload.click();
-});
-avatarUpload.addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    avatarPhoto.src = ev.target.result;
-    avatarPhoto.style.display = "block";
-    try{ localStorage.setItem("liss_avatar", ev.target.result); }catch(err){ /* storage cheio/bloqueado — ignora */ }
-  };
-  reader.readAsDataURL(file);
-});
-(function loadAvatar(){
+  if(sharing) return stopScreen();
   try{
-    const saved = localStorage.getItem("liss_avatar");
-    if(saved){ avatarPhoto.src = saved; avatarPhoto.style.display = "block"; }
-  }catch(err){ /* localStorage indisponível */ }
-})();
+    screenStream = await navigator.mediaDevices.getDisplayMedia({video: true});
+    screenVideo = document.createElement('video'); screenVideo.srcObject = screenStream; await screenVideo.play();
+    screenCanvas = document.createElement('canvas'); sharing = true;
+    btnScreen.classList.add('active'); btnScreen.querySelector('span').textContent = 'Parar'; $('screen-thumb').style.display = 'block';
+    screenTimer = setInterval(() => {
+      screenCanvas.width = screenVideo.videoWidth / 2; screenCanvas.height = screenVideo.videoHeight / 2;
+      screenCanvas.getContext('2d').drawImage(screenVideo, 0, 0, screenCanvas.width, screenCanvas.height);
+      const url = screenCanvas.toDataURL('image/jpeg', .6); lastFrame = url.split(',')[1]; $('screen-thumb').src = url;
+    }, 4000);
+    screenStream.getVideoTracks()[0].onended = stopScreen;
+  }catch(e){ sys('Compartilhamento de tela recusado ou indisponível.'); }
+};
+function stopScreen(){
+  sharing = false; lastFrame = null; clearInterval(screenTimer);
+  screenStream && screenStream.getTracks().forEach(t => t.stop());
+  btnScreen.classList.remove('active'); btnScreen.querySelector('span').textContent = 'Ver tela'; $('screen-thumb').style.display = 'none';
+}
+
+/* ---------- microfone ---------- */
+btnSpeak.onclick = async () => {
+  if(rec){ mediaRec.stop(); rec = false; btnSpeak.classList.remove('recording'); btnSpeak.querySelector('span').textContent = 'Falar'; return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    mediaRec = new MediaRecorder(stream); chunks = [];
+    mediaRec.ondataavailable = e => chunks.push(e.data);
+    mediaRec.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, {type: mediaRec.mimeType || 'audio/webm'});
+      const {d, t} = bubble('user', 'VOCÊ 🎤'); t.textContent = 'ouvindo você…'; pendingUserBubble = t;
+      const au = document.createElement('audio'); au.controls = true; au.src = URL.createObjectURL(blob); d.appendChild(au);
+      const r = new FileReader(); r.onloadend = () => send({audio: r.result.split(',')[1], frame: lastFrame}); r.readAsDataURL(blob);
+    };
+    mediaRec.start(); rec = true; btnSpeak.classList.add('recording'); btnSpeak.querySelector('span').textContent = 'Parar';
+  }catch(e){ sys('Acesso ao microfone negado ou indisponível.'); }
+};
+
+/* ---------- retrato ---------- */
+stage.onclick = () => { if(!sharing) $('avatar-upload').click(); };
+$('avatar-upload').onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const img = new Image(); img.onload = () => {
+    const c = document.createElement('canvas'), s = 256; c.width = c.height = s;
+    const m = Math.min(img.width, img.height); c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
+    const url = c.toDataURL('image/jpeg', .85); $('avatar-photo').src = url; $('avatar-photo').style.display = 'block';
+    try{ localStorage.setItem('liss_avatar', url); }catch(_){}
+  }; img.src = URL.createObjectURL(f);
+};
+try{ const s = localStorage.getItem('liss_avatar'); if(s){ $('avatar-photo').src = s; $('avatar-photo').style.display = 'block'; } }catch(_){}
+
+/* ---------- halo reativo + pétalas ---------- */
+const halo = $('halo'), hx = halo.getContext('2d'), bg = $('bg'), bx = bg.getContext('2d');
+let amp = 0, W, H, petals = [];
+function fit(c, x){ const d = Math.min(devicePixelRatio || 1, 2), w = c.clientWidth, h = c.clientHeight; c.width = w * d; c.height = h * d; x.setTransform(d, 0, 0, d, 0, 0); return [w, h]; }
+function resize(){
+  fit(halo, hx); [W, H] = fit(bg, bx);
+  const n = Math.round(Math.min(46, W / 32));
+  petals = Array.from({length: n}, () => ({x: Math.random() * W, y: Math.random() * H, s: 5 + Math.random() * 9, vy: .35 + Math.random() * .7, ph: Math.random() * 6.28, r: Math.random() * 6.28, vr: (Math.random() - .5) * .03, st: Math.random() < .3}));
+}
+addEventListener('resize', resize); resize();
+function petal(p, t){
+  bx.save(); bx.translate(p.x, p.y); bx.rotate(p.r);
+  if(p.st){ bx.globalAlpha = .25 + .6 * Math.abs(Math.sin(t / 700 + p.ph)); bx.fillStyle = '#fff2c9'; bx.fillRect(-1, -p.s / 3, 2, p.s * .66); bx.fillRect(-p.s / 3, -1, p.s * .66, 2); }
+  else { bx.globalAlpha = .55; bx.fillStyle = p.s > 9 ? '#ffb3d4' : '#ff8fc0'; bx.beginPath(); bx.ellipse(0, 0, p.s, p.s * .55, 0, 0, 6.28); bx.fill(); }
+  bx.restore();
+}
+function frame(t){
+  requestAnimationFrame(frame);
+  if(document.hidden) return;
+  /* amplitude: analisador real > simulada (voz do navegador) > respiração */
+  let target = .05 + .03 * Math.sin(t / 900);
+  if(an){ an.getByteFrequencyData(anData); target = Math.min(1, anData.reduce((a, b) => a + b, 0) / anData.length / 110); }
+  else if(speechActive) target = .35 + .25 * Math.abs(Math.sin(t / 130)) * Math.abs(Math.sin(t / 410));
+  else if(state === 'thinking') target = .18;
+  amp += (target - amp) * .22;
+  $('core').style.transform = `scale(${1 + amp * .16})`;
+
+  const w = halo.clientWidth, h = halo.clientHeight, cx = w / 2, cy = h * .5, R = w * .335, N = 72;
+  hx.clearRect(0, 0, w, h);
+  hx.lineCap = 'round'; hx.lineWidth = Math.max(2, w * .009);
+  for(let i = 0; i < N; i++){
+    const a = i / N * 6.283 - 1.5708;
+    let len = w * .012 + amp * w * .12 * (.4 + .6 * Math.abs(Math.sin(i * 1.7 + t / 140 + i % 5)));
+    if(state === 'thinking') len = w * .012 + w * .05 * Math.max(0, Math.sin(a * 2 - t / 220));
+    hx.strokeStyle = `hsl(${320 - (i / N) * 130} 95% ${72 + amp * 12}%)`;
+    hx.globalAlpha = .55 + amp * .45;
+    hx.beginPath(); hx.moveTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); hx.lineTo(cx + Math.cos(a) * (R + len), cy + Math.sin(a) * (R + len)); hx.stroke();
+  }
+  bx.clearRect(0, 0, W, H);
+  for(const p of petals){
+    if(!REDUCE){ p.y += p.vy * (p.st ? .15 : 1); p.x += Math.sin(t / 1400 + p.ph) * .5; p.r += p.vr; if(p.y > H + 20){ p.y = -20; p.x = Math.random() * W; } }
+    petal(p, t);
+  }
+}
+requestAnimationFrame(frame);
+
+/* ---------- início ---------- */
+bubble('liss', 'LISS ✦').t.textContent = 'Ora, ora… o plebeu favorito voltou. Diga logo o que quer, Gatão, antes que eu mude de ideia.';
+connect();
 </script>
 </body>
 </html>
