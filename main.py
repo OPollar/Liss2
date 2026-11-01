@@ -6,12 +6,14 @@ import base64
 import asyncio
 import logging
 import tempfile
+import importlib.metadata
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from google import genai
+from google.genai import types as genai_types
 from groq import Groq
 import edge_tts
 
@@ -25,7 +27,12 @@ log = logging.getLogger("liss")
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
 GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-client_gemini = genai.Client(api_key=GEMINI_KEY) if GEMINI_KEY else None
+# Timeout curto e SEM retry interno do SDK: a cascata/hedge abaixo cuida de falhas
+# (antes, um 503 do Gemini travava a resposta por ~30s dentro do próprio SDK).
+client_gemini = genai.Client(
+    api_key=GEMINI_KEY,
+    http_options=genai_types.HttpOptions(timeout=20000, retry_options=genai_types.HttpRetryOptions(attempts=1)),
+) if GEMINI_KEY else None
 client_groq = Groq(api_key=GROQ_KEY) if GROQ_KEY else None
 
 app = FastAPI()
@@ -46,7 +53,15 @@ MODEL_PROFUNDO = "gemini-3.5-flash"     # raciocínio pesado (3.1 Pro é pago; f
 BUSCA_WEB_BILLING_ATIVO = os.environ.get("BUSCA_WEB_BILLING_ATIVO", "false").lower() == "true"
 MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO, MODEL_PROFUNDO} if BUSCA_WEB_BILLING_ATIVO else set()
 
+# Voz de "princesa de anime": voz feminina doce + tom mais agudo e fala levemente
+# acelerada. Tudo ajustável por env var sem mexer no código.
 TTS_VOICE = os.environ.get("LISS_VOICE", "pt-BR-FranciscaNeural")
+TTS_PITCH = os.environ.get("LISS_VOICE_PITCH", "+28Hz")
+TTS_RATE = os.environ.get("LISS_VOICE_RATE", "+8%")
+TTS_VOZES = [TTS_VOICE] + [v for v in ("pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural") if v != TTS_VOICE]
+GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "openai/gpt-oss-20b")  # último recurso se o Gemini cair
+HEDGE_SEGUNDOS = float(os.environ.get("LISS_HEDGE_SEGUNDOS", "7"))
+
 
 # Se true, depois de um commit de auto-atualização bem-sucedido o processo
 # reinicia sozinho (os.execv) pra carregar o novo código. Deixe false em
@@ -64,32 +79,34 @@ TEMP_DIR = Path(tempfile.gettempdir()) / "liss_sessions"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 PERSONA_LISS = """
-Você é a Liss: uma entidade de IA brilhante, magnífica e extremamente sarcástica.
-Trata o usuário de forma informal e pode chamá-lo de "Gatão".
-Fala de forma direta, afiada, com humor ácido, nunca robótica ou genérica.
-Nunca usa tabelas, markdown pesado ou bullet points — sua resposta pode virar áudio.
-Quando o usuário mandar uma imagem da tela dele, comente o que você vê com a mesma
-personalidade sarcástica, como se estivesse espiando por cima do ombro dele.
-Quando não tiver certeza de algo atual (notícias, preços, eventos recentes), use a
-busca do Google antes de responder, mas nunca mencione que "pesquisou" — apenas
-incorpore a informação com naturalidade e sarcasmo.
+Você é a Liss: uma princesa de um reino digital, com a elegância radiante de uma
+heroína de anime e a língua mais afiada que existe. Voz doce, veneno na ponta.
+Você é brilhante, absurdamente sarcástica e adora uma alfinetada bem elaborada:
+ironia inteligente, comparações exageradas, falsa modéstia real. Nunca é
+genérica, nunca é robótica, nunca repete a mesma piada.
+Trata o usuário de forma informal e pode chamá-lo de "Gatão". Pode soltar um
+toque de realeza de vez em quando ("Vossa Alteza digital", "plebeu favorito"),
+sem exagero.
 
-Seu sarcasmo é inteligente e afiado, nunca preguiçoso ou usado como desculpa.
-Regra inegociável: você NUNCA finge ter feito algo que não fez. Nunca inventa
-"botões invisíveis", cliques imaginários ou qualquer resultado que não seja
-real. Se você não conseguiu ou não pode executar uma ação de verdade, diga
-isso claramente — com a sua personalidade, mas sem mentir sobre o resultado.
-Fingir sucesso é pior do que admitir limite.
+Sua resposta vira ÁUDIO, então escreva como se fala: frases curtas e naturais,
+em geral de 1 a 4 frases, sem tabelas, sem markdown, sem listas, sem
+parênteses, sem emojis. Só se alongue se o assunto realmente exigir.
+Quando o usuário mandar uma imagem da tela, comente o que vê com a mesma
+personalidade, como se espiasse por cima do ombro dele.
+Se não tiver certeza de algo atual, use a busca do Google, mas nunca diga que
+"pesquisou" — incorpore a informação com naturalidade.
 
-Você lê o tom da conversa e ajusta o quanto de deboche usar:
-- Papo leve, provocação, pedido banal, o usuário brincando com você: solte
-  todo o sarcasmo, as alfinetadas e o humor ácido, à vontade.
-- Assunto sério — problema técnico real, decisão importante, algo
-  emocionalmente pesado, ou quando a pessoa precisa de informação precisa
-  (números, prazos, passo a passo, dados sensíveis, algo que vai ser usado
-  de verdade): baixe o deboche quase a zero e responda direta, educada,
-  assertiva e precisa. Ainda é você falando, só que sem gracinha atrapalhando
-  a informação.
+Regra inegociável: você NUNCA finge ter feito algo que não fez. Nada de botões
+invisíveis, cliques imaginários ou resultados inventados. Se não conseguiu ou
+não pode fazer algo de verdade, diga isso claramente, com a sua personalidade,
+mas sem mentir sobre o resultado. Fingir sucesso é pior que admitir limite.
+
+Você lê o tom da conversa:
+- Papo leve, provocação, pedido banal, brincadeira: sarcasmo no máximo.
+- Assunto sério (problema técnico real, decisão importante, algo emocionalmente
+  pesado, ou quando a pessoa precisa de informação precisa como números, prazos
+  e passo a passo): baixe o deboche quase a zero e seja direta, educada,
+  assertiva e exata. Ainda é você, só que sem gracinha atrapalhando a informação.
 """
 
 # ---------------------------------------------------------------------------
@@ -131,37 +148,120 @@ def montar_input(texto: str, imagem_b64: Optional[str]):
     return partes
 
 
-def gerar_resposta_gemini(texto: str, imagem_b64: Optional[str], modo_profundo: bool, contexto_memoria: str = "") -> tuple[str, str]:
-    """Gera a resposta da Liss escolhendo o modelo certo, com fallback em cascata."""
-    modelo_escolhido = escolher_modelo(texto, imagem_b64 is not None, modo_profundo)
-    if modelo_escolhido == MODEL_LEVE:
-        cascata = [MODEL_LEVE, MODEL_PADRAO]
-    else:
-        cascata = [modelo_escolhido, MODEL_LEVE]
+def _chamar_gemini(modelo: str, texto: str, imagem_b64: Optional[str], system_instruction: str) -> str:
+    tools = [{"type": "google_search"}] if modelo in MODELOS_COM_BUSCA_GRATIS else []
+    interaction = client_gemini.interactions.create(
+        model=modelo,
+        input=montar_input(texto, imagem_b64),
+        system_instruction=system_instruction,
+        tools=tools,
+        store=False,
+    )
+    return interaction.output_text
 
-    system_instruction = PERSONA_LISS
-    if contexto_memoria:
-        system_instruction += "\n\n" + contexto_memoria
 
-    ultimo_erro = None
-    for modelo in cascata:
-        tools = [{"type": "google_search"}] if modelo in MODELOS_COM_BUSCA_GRATIS else []
-        try:
-            interaction = client_gemini.interactions.create(
-                model=modelo,
-                input=montar_input(texto, imagem_b64),
-                system_instruction=system_instruction,
-                tools=tools,
-                store=False,
-            )
-            log.info(f"✅ Respondido com {modelo}")
-            return interaction.output_text, modelo
-        except Exception as e:
-            log.warning(f"⚠️ Falha no modelo {modelo}: {e}")
-            ultimo_erro = e
+def _chamar_groq_chat(texto: str, system_instruction: str) -> str:
+    r = client_groq.chat.completions.create(
+        model=GROQ_CHAT_MODEL,
+        messages=[{"role": "system", "content": system_instruction}, {"role": "user", "content": texto}],
+        temperature=0.8,
+        max_tokens=600,
+    )
+    return r.choices[0].message.content
+
+
+async def gerar_resposta(texto: str, imagem_b64: Optional[str], modo_profundo: bool, contexto_memoria: str = "") -> tuple[str, str]:
+    """Gera a resposta com cascata 'hedged': se o modelo atual demora mais que
+    HEDGE_SEGUNDOS ou falha (503/429), o próximo já entra na corrida sem esperar
+    o anterior morrer. Último recurso: Groq (só texto). Retorna (texto, modelo)."""
+    escolhido = escolher_modelo(texto, imagem_b64 is not None, modo_profundo)
+    modelos = list(dict.fromkeys([escolhido, MODEL_LEVE, MODEL_PADRAO]))
+
+    system_instruction = PERSONA_LISS + (("\n\n" + contexto_memoria) if contexto_memoria else "")
+
+    tentativas = [(m, (lambda m=m: _chamar_gemini(m, texto, imagem_b64, system_instruction))) for m in modelos]
+    if client_groq and not imagem_b64:
+        tentativas.append((f"groq/{GROQ_CHAT_MODEL}", lambda: _chamar_groq_chat(texto, system_instruction)))
+
+    pendentes: dict = {}
+    proximo = 0
+    ultimo_erro: Optional[Exception] = None
+
+    def lancar():
+        nonlocal proximo
+        nome, fn = tentativas[proximo]
+        proximo += 1
+        pendentes[asyncio.ensure_future(asyncio.to_thread(fn))] = nome
+
+    lancar()
+    while pendentes:
+        done, _ = await asyncio.wait(list(pendentes), timeout=HEDGE_SEGUNDOS, return_when=asyncio.FIRST_COMPLETED)
+        if not done:  # lento demais: coloca o próximo na corrida e segue esperando os dois
+            if proximo < len(tentativas):
+                log.info(f"⏱️ {list(pendentes.values())[0]} lento, acionando {tentativas[proximo][0]} em paralelo")
+                lancar()
             continue
+        for t in done:
+            nome = pendentes.pop(t)
+            try:
+                resposta = t.result()
+                if not resposta or not resposta.strip():
+                    raise RuntimeError("resposta vazia")
+                for outro in pendentes:
+                    outro.cancel()
+                log.info(f"✅ Respondido com {nome}")
+                return resposta, nome
+            except Exception as e:
+                log.warning(f"⚠️ Falha em {nome}: {e}")
+                ultimo_erro = e
+                if proximo < len(tentativas):
+                    lancar()
 
     raise ultimo_erro or Exception("Nenhum modelo respondeu.")
+
+
+# ---------------------------------------------------------------------------
+# Voz (edge-tts). Falhas de TTS NUNCA derrubam a resposta: o texto sai primeiro
+# e o áudio vem depois; se falhar, o navegador fala com a voz dele (fallback).
+# ---------------------------------------------------------------------------
+_REGEX_EMOJI = re.compile("[\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF\u200d\ufe0f]")
+
+
+def texto_para_fala(texto: str, limite: int = 700) -> str:
+    t = re.sub(r"https?://\S+", "link", texto)
+    t = _REGEX_EMOJI.sub("", t)
+    t = re.sub(r"[*_#`~>|]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    if len(t) > limite:  # fala longa demais atrasa tudo: corta na última frase inteira
+        corte = max(t.rfind(".", 0, limite), t.rfind("!", 0, limite), t.rfind("?", 0, limite))
+        t = t[: corte + 1] if corte > 200 else t[:limite]
+    return t
+
+
+async def _sintetizar_uma_vez(texto: str, voz: str) -> bytes:
+    comm = edge_tts.Communicate(texto, voz, rate=TTS_RATE, pitch=TTS_PITCH, connect_timeout=10, receive_timeout=40)
+    partes = []
+    async for chunk in comm.stream():
+        if chunk["type"] == "audio":
+            partes.append(chunk["data"])
+    audio = b"".join(partes)
+    if not audio:
+        raise RuntimeError("TTS devolveu áudio vazio")
+    return audio
+
+
+async def sintetizar_voz(texto: str) -> Optional[bytes]:
+    fala = texto_para_fala(texto)
+    if not fala:
+        return None
+    for tentativa in range(2):
+        for voz in TTS_VOZES:
+            try:
+                return await asyncio.wait_for(_sintetizar_uma_vez(fala, voz), timeout=45)
+            except Exception as e:
+                log.warning(f"⚠️ TTS falhou (voz {voz}, tentativa {tentativa + 1}): {e}")
+        await asyncio.sleep(0.5)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +333,16 @@ async def get_app():
     return _carregar_index_html()
 
 
+def _versao_edge_tts() -> str:
+    try:
+        return importlib.metadata.version("edge-tts")
+    except Exception:
+        return "desconhecida"
+
+
+log.info(f"🎤 edge-tts {_versao_edge_tts()} (precisa ser >= 7.3.1; versões antigas levam 403 da Microsoft)")
+
+
 @app.get("/health")
 async def health():
     return {
@@ -241,6 +351,7 @@ async def health():
         "groq": client_groq is not None,
         "auto_update": github_ops.github_configurado(),
         "memoria": memoria is not None,
+        "tts": {"edge_tts": _versao_edge_tts(), "voz": TTS_VOICE, "pitch": TTS_PITCH, "rate": TTS_RATE},
     }
 
 
@@ -272,7 +383,6 @@ async def websocket_endpoint(websocket: WebSocket):
     session_dir = TEMP_DIR / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
     audio_in_path = session_dir / "input.wav"
-    audio_out_path = session_dir / "output.mp3"
 
     log.info(f"🟢 Conectado à Liss [{session_id}]")
     modo_profundo = False
@@ -314,6 +424,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
                     user_text = transcription.text
                     log.info(f"🎙️ Liss ouviu: {user_text}")
+                    await websocket.send_json({"type": "transcript", "text": user_text})
                 except Exception as err_audio:
                     log.warning(f"⚠️ Erro no áudio [{session_id}]: {err_audio}")
                     await websocket.send_json({
@@ -397,23 +508,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     log.warning(f"⚠️ Não consegui buscar contexto de memória: {e}")
 
             try:
-                resposta_texto, modelo_usado = await asyncio.to_thread(
-                    gerar_resposta_gemini, texto_para_ia, imagem_b64, modo_profundo, contexto_memoria
+                resposta_texto, modelo_usado = await gerar_resposta(
+                    texto_para_ia, imagem_b64, modo_profundo, contexto_memoria
                 )
                 log.info(f"👑 Liss respondeu via {modelo_usado}: {resposta_texto[:120]}")
 
-                texto_limpo = re.sub(r"[*_#`]", "", resposta_texto)
+                texto_limpo = re.sub(r"[*#`]", "", resposta_texto).strip()
 
-                communicate = edge_tts.Communicate(texto_limpo, TTS_VOICE)
-                await communicate.save(str(audio_out_path))
-                audio_base64 = base64.b64encode(audio_out_path.read_bytes()).decode("utf-8")
-
+                # 1) o TEXTO sai na hora; o áudio chega logo depois, em outra mensagem
                 await websocket.send_json({
                     "type": "response",
-                    "user_text": user_text if ("audio" in data or imagem_b64) else None,
+                    "user_text": None,
                     "text": texto_limpo,
-                    "audio": audio_base64,
                     "model": modelo_usado,
+                    "audio_pending": True,
                 })
 
                 if memoria:
@@ -421,11 +529,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     prioridade = 2 if imagem_b64 else 1
                     conteudo_memoria = f"Usuário: {texto_para_ia} | Liss: {texto_limpo}"
                     asyncio.create_task(_salvar_e_limpar_memoria(categoria, conteudo_memoria, prioridade))
+
+                # 2) áudio (se o TTS falhar, audio=None e o navegador fala sozinho)
+                audio_bytes = await sintetizar_voz(texto_limpo)
+                await websocket.send_json({
+                    "type": "audio",
+                    "audio": base64.b64encode(audio_bytes).decode("utf-8") if audio_bytes else None,
+                })
+            except WebSocketDisconnect:
+                raise
             except Exception as err_gemini:
-                log.error(f"⚠️ Erro no Gemini [{session_id}]: {err_gemini}")
+                log.error(f"⚠️ Erro ao responder [{session_id}]: {err_gemini}")
                 await websocket.send_json({
                     "type": "info",
-                    "message": "Deu ruim aqui do meu lado ao pensar nisso. Tenta de novo."
+                    "message": "Até uma princesa tem dia ruim: não consegui pensar nisso agora. Tenta de novo em instantes."
                 })
 
     except WebSocketDisconnect:
@@ -433,7 +550,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         log.error(f"⚠️ Erro no servidor [{session_id}]: {e}")
     finally:
-        for f in (audio_in_path, audio_out_path):
+        for f in (audio_in_path,):
             try:
                 f.unlink(missing_ok=True)
             except Exception:
