@@ -57,11 +57,11 @@ MODEL_PROFUNDO = "gemini-3.5-flash"     # raciocínio pesado (3.1 Pro é pago; f
 BUSCA_WEB_BILLING_ATIVO = os.environ.get("BUSCA_WEB_BILLING_ATIVO", "false").lower() == "true"
 MODELOS_COM_BUSCA_GRATIS = {MODEL_LEVE, MODEL_PADRAO, MODEL_PROFUNDO} if BUSCA_WEB_BILLING_ATIVO else set()
 
-# Voz de "princesa de anime": voz feminina doce + tom mais agudo e fala levemente
-# acelerada. Tudo ajustável por env var sem mexer no código.
+# Voz de princesa: voz feminina aveludada, tom médio-agudo e fala fluida.
+# Ajustável via variáveis de ambiente sem mexer no código.
 TTS_VOICE = os.environ.get("LISS_VOICE", "pt-BR-FranciscaNeural")
-TTS_PITCH = os.environ.get("LISS_VOICE_PITCH", "+28Hz")
-TTS_RATE = os.environ.get("LISS_VOICE_RATE", "+8%")
+TTS_PITCH = os.environ.get("LISS_VOICE_PITCH", "+12Hz")
+TTS_RATE = os.environ.get("LISS_VOICE_RATE", "+6%")
 TTS_VOZES = [TTS_VOICE] + [v for v in ("pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural") if v != TTS_VOICE]
 GROQ_CHAT_MODEL = os.environ.get("GROQ_CHAT_MODEL", "openai/gpt-oss-20b")  # último recurso se o Gemini cair
 HEDGE_SEGUNDOS = float(os.environ.get("LISS_HEDGE_SEGUNDOS", "7"))
